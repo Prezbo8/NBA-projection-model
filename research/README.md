@@ -20,6 +20,7 @@ Era split (user decision Nov 8 2026: focus on 2021-26, when pace and scoring ros
 | pace half-life 180 / 365 (longer) | rejected | 14.773 / 14.866 total |
 | pace half-life 30 / 45 / 60 (shorter) | not adopted: noise-sized | 14.703 / 14.671 / 14.656 (best -0.015) |
 | modern-era retune (tuned 2021-24): half-life 25, lam 5 for totals | **rejected on the 2024-26 test** | tune MAE total 14.833 -> 14.671 (grid flat at HL 20-30), but test 2024-26 MAE 14.64 / 15.05 (v1) vs 14.67 / 15.04: gain gone. vs OPEN edge>=3: v1 1,100 bets 54.8% +51.2u, retune 1,157 bets 54.4% +43.8u; both lose to CLOSE |
+| **v1 totals report card 2023-26** (`research/grade_totals.py`, fresh v1 backtest, no look-ahead) | **B at the open, F at the close** | vs OPEN edge>=3: 1,785 bets 55.2% +97.4u (+5.5%, z +2.4); seasons 55.9 / 52.1 / 57.6%; overs 54.7%, unders 55.9%; the close moved toward the model 63% of the time (avg +2.36 pts); max drawdown 43.7u, 15/21 winning months. vs CLOSE: 1,950 bets 48.6% -7.2%. v1 is more accurate than the open (14.81/14.65/15.06 vs 15.18/14.62/15.14), less than the close. NOTE: data/backtest/team_preds.csv is v2 (has look-ahead) |
 
 ## Props
 | Idea | Verdict | Numbers |
