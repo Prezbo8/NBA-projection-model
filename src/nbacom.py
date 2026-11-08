@@ -8,6 +8,7 @@ Endpoint and parameter names follow swar/nba_api (LeagueGameLog).
 """
 import csv
 import gzip
+import io
 import os
 import sys
 import time
@@ -67,7 +68,8 @@ def season_log(season, who):
 
 
 def write(path, cols, rows):
-    with gzip.open(path, "wt", newline="") as f:
+    # mtime=0: same data -> same bytes, so git only sees a change when the data changes
+    with gzip.GzipFile(path, "wb", mtime=0) as gz, io.TextIOWrapper(gz, newline="") as f:
         w = csv.writer(f)
         w.writerow(cols)
         w.writerows(rows)

@@ -13,6 +13,7 @@ Action Network player ids are NOT nba.com ids: rows keep the player's name and t
   python src/actionnet.py 2022-10-18 2023-06-20      # a range (days already saved are skipped)
 """
 import gzip
+import io
 import json
 import os
 import sys
@@ -110,7 +111,7 @@ def props(d, teams_of):
 
 def save(rows, path):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with gzip.open(path, "wt") as f:
+    with gzip.GzipFile(path, "wb", mtime=0) as gz, io.TextIOWrapper(gz) as f:  # mtime=0: stable bytes
         pd.DataFrame(rows).to_csv(f, index=False)
 
 
