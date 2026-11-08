@@ -30,7 +30,9 @@ PREDS = os.path.join(ROOT, "data", "backtest", "team_preds.csv")
 HALF_LIFE, LAM = 90, 5    # tuned Nov 8 2026 on 2015-21 (MAE total 14.67, margin 10.08)
 WINDOW = 400              # days of history in each fit (older games have ~0 weight anyway)
 REPL, AWAY_DAYS = availability.REPL, availability.AWAY_DAYS
-TUNE_SEASONS = ["2015-16", "2016-17", "2017-18", "2018-19", "2019-20", "2020-21"]
+# settings are judged on these seasons; env TUNE_SEASONS="2021-22,2022-23,2023-24" switches to the modern
+# era (user, Nov 8 2026: focus on 2021-26, pace and scoring changed), keeping 2024-26 as the untouched test
+TUNE_SEASONS = os.environ.get("TUNE_SEASONS", "2015-16,2016-17,2017-18,2018-19,2019-20,2020-21").split(",")
 
 
 def load():
