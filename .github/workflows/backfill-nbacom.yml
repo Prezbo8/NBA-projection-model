@@ -2,7 +2,8 @@ name: Backfill nba.com game logs
 
 # Phase 1: full-season player + team game logs from nba.com.
 #   fetch (Mac runner): only talks to nba.com, uploads the season files as an artifact. Read-only token.
-#   load  (GitHub runner): checks the files, commits them to data/nbacom, loads Supabase (if secrets set).
+#   load  (GitHub runner): checks the files, commits them to data/nbacom (the history lives in the repo,
+#         not Supabase: user decision Nov 7 2026).
 # SECURITY: the repo is public, so the Mac job may only be started by hand (never by pull_request).
 on:
   workflow_dispatch:
@@ -36,14 +37,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions: {contents: write, actions: read}
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with: {python-version: "3.14"}
-      - run: pip install -q pandas curl_cffi
+      - run: pip install -q pandas
       - uses: actions/download-artifact@v8
         with:
           name: nbacom
@@ -59,8 +57,6 @@ jobs:
           git add data/nbacom
           git diff --cached --quiet || git commit -m "nba.com game logs ${{ inputs.first }} to ${{ inputs.last }}"
           git pull --rebase -q && git push
-      - name: Load Supabase
-        run: python src/store.py "${{ inputs.first }}" "${{ inputs.last }}"
       - name: Summary
         if: always()
         run: |
