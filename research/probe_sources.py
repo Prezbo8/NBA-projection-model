@@ -42,7 +42,7 @@ SOURCES = [
     ("ESPN: injuries",
      "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries", BROWSER, "injuries"),
     ("Basketball-Reference: LeBron 2004 game log",
-     "https://www.basketball-reference.com/players/j/jamesle01/gamelog/2004", BROWSER, "pgl_basic"),
+     "https://www.basketball-reference.com/players/j/jamesle01/gamelog/2004", BROWSER, "Game Log"),
     ("pbpstats: team totals 2024-25",
      "https://api.pbpstats.com/get-totals/nba?Season=2024-25&SeasonType=Regular%2BSeason&Type=Team",
      BROWSER, "multi_row_table_data"),
@@ -58,7 +58,35 @@ SOURCES = [
      "https://www.sportsbookreviewsonline.com/scoresoddsarchives/nba-odds-2021-22/", BROWSER, "Rot"),
     ("SBR archive: NBA odds 2008-09",
      "https://www.sportsbookreviewsonline.com/scoresoddsarchives/nba-odds-2008-09/", BROWSER, "Rot"),
+    ("ESPN: scoreboard 2008-11-05",
+     "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20081105", BROWSER, "events"),
+    ("ESPN: scoreboard 2003-11-05",
+     "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=20031105", BROWSER, "events"),
+    ("pbpstats: LeBron 2003-04 game logs",
+     "https://api.pbpstats.com/get-game-logs/nba?Season=2003-04&SeasonType=Regular%2BSeason"
+     "&EntityType=Player&EntityId=2544", BROWSER, "multi_row_table_data"),
+    ("pbpstats: team game logs 2008-09 (all teams)",
+     "https://api.pbpstats.com/get-game-logs/nba?Season=2008-09&SeasonType=Regular%2BSeason"
+     "&EntityType=Team&EntityId=1610612739", BROWSER, "multi_row_table_data"),
 ]
+
+
+def espn_box(date):
+    """First game on a date -> does ESPN's summary endpoint have a player box score for it?"""
+    sb = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard",
+                      params={"dates": date}, headers=BROWSER, timeout=30).json()
+    gid = sb["events"][0]["id"]
+    s = requests.get("https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary",
+                     params={"event": gid}, headers=BROWSER, timeout=30).json()
+    team = s["boxscore"]["players"][0]
+    st = team["statistics"][0]
+    a = st["athletes"][0]
+    return f"game {gid}: {len(st['athletes'])} players, cols={st['labels']}, first={a['athlete']['displayName']} {a['stats']}"
+
+
+def pbp_sample(url):
+    rows = requests.get(url, headers=BROWSER, timeout=30).json()["multi_row_table_data"]
+    return f"{len(rows)} rows; keys={list(rows[0])[:40]}"
 
 
 def probe(name, url, headers, must):
@@ -78,3 +106,13 @@ if __name__ == "__main__":
         if s[0].startswith("Basketball-Reference"):
             time.sleep(3)  # stay far under its ~20 requests/minute limit
         print(probe(*s), flush=True)
+    for d in ("20081105", "20031105"):
+        try:
+            print("ESPN box", d, "|", espn_box(d), flush=True)
+        except Exception as e:
+            print("ESPN box", d, "| FAIL", type(e).__name__, e, flush=True)
+    for name, url, _, _ in SOURCES[-2:]:
+        try:
+            print("SAMPLE", name, "|", pbp_sample(url)[:1500], flush=True)
+        except Exception as e:
+            print("SAMPLE", name, "| FAIL", type(e).__name__, e, flush=True)
