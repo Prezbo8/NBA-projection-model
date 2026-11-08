@@ -126,6 +126,18 @@ def match(sbr):
     amb = m.groupby("sbr_row").game_id.transform("nunique") > 1
     m.loc[amb, ["game_id", "season", "season_type", "away", "home"]] = None
     m = m.drop_duplicates("sbr_row")
+    # second try for the rest at +-1 day (SBR dates some games a day off, e.g. Christmas games as Dec 24)
+    miss = m.game_id.isna()
+    for shift in (1, -1):
+        d = m[miss].copy()
+        d["date2"] = (pd.to_datetime(d.date) + pd.Timedelta(days=shift)).dt.strftime("%Y-%m-%d")
+        hit = d.drop(columns=["game_id", "season", "season_type", "away", "home", "home_name"]).merge(
+            g, left_on=["date2", "away_pts", "home_pts"], right_on=["date", "away_pts", "home_pts"],
+            suffixes=("", "_nba"))
+        hit = hit[hit.apply(lambda r: same_team(r.sbr_home, r.home_name), axis=1)].drop_duplicates("sbr_row", keep=False)
+        for c in ["game_id", "season", "season_type", "away", "home"]:
+            m.loc[m.sbr_row.isin(hit.sbr_row), c] = m.sbr_row.map(hit.set_index("sbr_row")[c])
+        miss = m.game_id.isna()
     assert len(m) == len(sbr), "every SBR game must appear exactly once"
     return m, int(amb.sum())
 
@@ -133,8 +145,9 @@ def match(sbr):
 def report(m, n_amb):
     """Per-season quality report. Returns False if a season looks broken."""
     good = True
-    m = m.assign(year=m.date.str[:4].astype(int), mo=m.date.str[5:7].astype(int))
-    m["start"] = m.year - (m.mo < 8)
+    # season from nba.com when matched (the 2019-20 bubble ran into Oct 2020), else from the date
+    guess = m.date.str[:4].astype(int) - (m.date.str[5:7].astype(int) < 8)
+    m = m.assign(start=m.season.str[:4].astype(float).fillna(guess).astype(int))
     print(f"\nsame-night same-score games left unmatched: {n_amb}")
     print("season | games | matched | close total range | median |close spread| | fav ML<0 when fav by spread | close total vs final (MAE)")
     for y, d in m.groupby("start"):
