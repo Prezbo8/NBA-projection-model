@@ -33,20 +33,19 @@ MARKET_STAT = {"pts": "PTS", "reb": "REB", "ast": "AST", "fg3m": "FG3M", "stl": 
                "pra": "PRA", "pr": "PR", "pa": "PA", "ra": "RA", "stocks": "STOCKS"}
 
 
-POISSON = {"reb", "ast", "fg3m", "stl", "blk", "stocks", "ra"}   # counting stats: Poisson; the rest: normal
+# Outcome variance around the projection = a*proj + b*proj^2, fitted Nov 8 2026 on 2021-23 player-games
+# (research/props_calibration.py). Backtest 2023-26 vs 513k consensus lines: even with these spreads the
+# model's P(over) is overconfident and the market's no-vig price is better calibrated (Brier .243 vs .255).
+VAR = {"pts": (3.891, 0.0), "reb": (1.542, 0.0), "ast": (1.394, 0.0), "fg3m": (1.066, 0.0124), "stl": (1.280, 0.0),
+       "blk": (1.125, 0.0), "pra": (4.597, 0.0), "pr": (4.330, 0.0), "pa": (4.071, 0.0), "ra": (1.966, 0.0),
+       "stocks": (1.265, 0.0)}
 
 
 def p_over(market, proj, line):
-    """Model's chance of going over `line` (v1 guess: Poisson for counts, normal sd = 1.1*sqrt(proj) for
-    points-heavy markets; to be checked against the props backtest before it drives any call)."""
-    if proj <= 0:
-        return 0.0
-    if market in POISSON:
-        k = math.floor(line)                     # over x.5 = at least k+1
-        cdf = sum(math.exp(-proj) * proj ** i / math.factorial(i) for i in range(k + 1))
-        return 1 - cdf
-    sd = 1.1 * math.sqrt(proj)
-    return 0.5 * math.erfc((line - proj) / (sd * math.sqrt(2)))
+    """Model's chance of going over `line`: normal with the fitted variance (over x.5 = at least floor+1)."""
+    a, b = VAR[market]
+    sd = math.sqrt(max(a * proj + b * proj * proj, 1e-6))
+    return 0.5 * math.erfc((math.floor(line) + 0.5 - proj) / (sd * math.sqrt(2)))
 
 
 def no_vig(over, under):
