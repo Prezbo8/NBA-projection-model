@@ -169,7 +169,7 @@ document.querySelector(".switch").addEventListener("click", e=>{ const t=e.targe
   document.querySelectorAll(".switch button").forEach(b=>b.classList.toggle("on", b.dataset.tab===t));
   ["games","props","paper"].forEach(x=>document.getElementById(x).hidden = t!==x); });
 document.getElementById("foot").innerHTML = "Lines: Action Network consensus (current) and opening line. Injuries: Rotowire play-chance, ESPN as backup. "
-  + "Model over chance is a first guess (Poisson / normal) and has not been checked against results yet. "
+  + "Model over chance uses each market's fitted outcome spread (backtest 2021-23); on 2023-26 lines the market's no-vig price was better calibrated. "
   + '<a href="https://github.com/Prezbo8/NBA-projection-model">Code</a>';
 </script></body></html>
 """
