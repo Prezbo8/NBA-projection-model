@@ -29,7 +29,7 @@ PREDS = os.path.join(ROOT, "data", "backtest", "player_preds.csv.gz")
 STATS = ["PTS", "REB", "AST", "FG3M", "STL", "BLK"]
 COMBOS = {"PRA": ["PTS", "REB", "AST"], "PR": ["PTS", "REB"], "PA": ["PTS", "AST"], "RA": ["REB", "AST"],
           "STOCKS": ["STL", "BLK"]}
-MIN_HL, RATE_HL, K, BOOST = 6, 120, 150, 0.6   # defaults until `tune`
+MIN_HL, RATE_HL, K, BOOST = 4, 60, 25, 0.0    # tuned Nov 8 2026 on 2021-23 (fixed eval set; any minutes boost hurt)
 OPP_HL, OPP_K = 90, 15                        # opponent allowed-rate half-life (days) / pseudo-games
 TUNE_SEASONS = ["2021-22", "2022-23"]
 DAY0 = pd.Timestamp("2000-01-01")
@@ -45,11 +45,32 @@ def load():
     return p.sort_values(["day", "GAME_ID", "PLAYER_ID"]).reset_index(drop=True)
 
 
+def player_asof(days, mins, vals, j, day, min_hl, rate_hl, k, league):
+    """Expected minutes (before teammate boost) and per-minute rates from a player's games [0, j)
+    (sorted by day) as of `day`. Shared by the backtest and today.py."""
+    if j == 0:
+        return np.nan, dict(league)                # no history: minutes get a rookie prior later
+    lo = np.searchsorted(days, day - 365)
+    # minutes: last games, weighted by games-ago
+    ga = np.arange(j - 1, lo - 1, -1) if j > lo else np.array([j - 1])
+    wm = 0.5 ** ((j - 1 - ga) / min_hl)
+    exp_min = (wm * mins[ga]).sum() / wm.sum()
+    # rates: weighted by days-ago, shrunk toward league
+    seg = slice(lo, j)
+    wd = 0.5 ** ((day - days[seg]) / rate_hl)
+    wmin = (wd * mins[seg]).sum()
+    return exp_min, {s: ((wd * vals[s][seg]).sum() + k * league[s]) / (wmin + k) for s in STATS}
+
+
+def league_rates(p):
+    return {s: p[s].sum() / p.MIN.sum() for s in STATS}
+
+
 def player_features(p, targets, min_hl, rate_hl, k):
     """Expected minutes (before teammate boost) and per-minute rates for target rows."""
     exp_min = np.full(len(p), np.nan)
     rates = {s: np.full(len(p), np.nan) for s in STATS}
-    league = {s: p[s].sum() / p.MIN.sum() for s in STATS}
+    league = league_rates(p)
     tmask = np.zeros(len(p), bool)
     tmask[targets] = True
     for _, idx in p.groupby("PLAYER_ID", sort=False).indices.items():
@@ -62,45 +83,45 @@ def player_features(p, targets, min_hl, rate_hl, k):
         vals = {s: p[s].to_numpy()[idx] for s in STATS}
         pos = np.searchsorted(idx, t)            # position of each target within this player's games
         for i, j in zip(t, pos):
-            if j == 0:
-                exp_min[i] = np.nan               # no history: filled later with a rookie prior
-                for s in STATS:
-                    rates[s][i] = league[s]
-                continue
-            lo = np.searchsorted(days, days[j] - 365)
-            # minutes: last games, weighted by games-ago
-            ga = np.arange(j - 1, lo - 1, -1) if j > lo else np.array([j - 1])
-            wm = 0.5 ** ((j - 1 - ga) / min_hl)
-            exp_min[i] = (wm * mins[ga]).sum() / wm.sum()
-            # rates: weighted by days-ago, shrunk toward league
-            seg = slice(lo, j)
-            wd = 0.5 ** ((days[j] - days[seg]) / rate_hl)
-            wmin = (wd * mins[seg]).sum()
+            exp_min[i], r = player_asof(days, mins, vals, j, days[j], min_hl, rate_hl, k, league)
             for s in STATS:
-                rates[s][i] = ((wd * vals[s][seg]).sum() + k * league[s]) / (wmin + k)
+                rates[s][i] = r[s]
     return exp_min, rates
+
+
+def weighted_asof(days, poss, vals, j, day, half_life, league=None, k_poss=0.0):
+    """Recency-weighted per-possession averages from rows [0, j) as of `day` (365-day window).
+    With `league`: rate relative to league, shrunk with k_poss pseudo-possessions. Without: mean of poss."""
+    lo = np.searchsorted(days, day - 365)
+    w = 0.5 ** ((day - days[lo:j]) / half_life)
+    if league is None:
+        return (w * poss[lo:j]).sum() / w.sum() if j > lo else np.nan
+    wp = (w * poss[lo:j]).sum()
+    return {s: ((w * vals[s][lo:j]).sum() + k_poss * league[s]) / (wp + k_poss) / league[s] for s in league}
+
+
+ALLOWED = ["PTS", "REB", "AST", "FG3M", "STL", "BLK"]
+
+
+def opp_tables(g):
+    """Per defense team: sorted arrays of the stats scored against it (for allowed-rate lookups)."""
+    t = g.assign(day=(g.date - DAY0).dt.days)
+    league = {s: t[s].sum() / t.poss.sum() for s in ALLOWED}
+    tabs = {}
+    for d_id, d in t.groupby("OPP_ID"):
+        d = d.sort_values("day")
+        tabs[d_id] = (d.GAME_ID.to_numpy(), d.day.to_numpy(), d.poss.to_numpy(), {s: d[s].to_numpy() for s in ALLOWED})
+    return tabs, league
 
 
 def opp_allowed(g):
     """Per team-game: what the opponent allows per possession for each stat, relative to league,
     from the opponent's earlier games (recency-weighted, shrunk). Keyed by (GAME_ID, OPP_ID)."""
-    cols = {"PTS": "PTS", "REB": "REB", "AST": "AST", "FG3M": "FG3M", "STL": "STL", "BLK": "BLK"}
-    t = g[["GAME_ID", "TEAM_ID", "OPP_ID", "date", "poss"] + list(cols)].copy()
-    t["day"] = (t.date - DAY0).dt.days
-    league = {s: t[s].sum() / t.poss.sum() for s in cols}
+    tabs, league = opp_tables(g)
     out = {}
-    # rows where OPP_ID is the defense: stats scored against it
-    for d_id, d in t.groupby("OPP_ID"):
-        d = d.sort_values("day")
-        days, poss = d.day.to_numpy(), d.poss.to_numpy()
-        vals = {s: d[s].to_numpy() for s in cols}
-        for j, (gid, day) in enumerate(zip(d.GAME_ID, days)):
-            lo = np.searchsorted(days, day - 365)
-            w = 0.5 ** ((day - days[lo:j]) / OPP_HL)
-            wp = (w * poss[lo:j]).sum()
-            avg_poss = 100.0
-            out[(gid, d_id)] = {s: ((w * vals[s][lo:j]).sum() + OPP_K * avg_poss * league[s]) /
-                                (wp + OPP_K * avg_poss) / league[s] for s in cols}
+    for d_id, (gids, days, poss, vals) in tabs.items():
+        for j, (gid, day) in enumerate(zip(gids, days)):
+            out[(gid, d_id)] = weighted_asof(days, poss, vals, j, day, OPP_HL, league, OPP_K * 100.0)
     return out
 
 
@@ -112,9 +133,7 @@ def team_pace(g):
         d = d.sort_values("day")
         days, poss = d.day.to_numpy(), d.poss.to_numpy()
         for j, (gid, day) in enumerate(zip(d.GAME_ID, days)):
-            lo = np.searchsorted(days, day - 365)
-            w = 0.5 ** ((day - days[lo:j]) / 60)
-            out[(gid, tid)] = (w * poss[lo:j]).sum() / w.sum() if j > lo else np.nan
+            out[(gid, tid)] = weighted_asof(days, poss, None, j, day, 60)
     return out
 
 
