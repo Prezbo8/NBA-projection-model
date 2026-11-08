@@ -11,6 +11,8 @@ import gzip
 import os
 import sys
 import time
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from curl_cffi import requests as cr
 
@@ -56,6 +58,8 @@ def season_log(season, who):
             for r in unplayed:
                 print(f"  dropped unplayed game {r[h.index('GAME_ID')]} {r[h.index('MATCHUP')]} {r[h.index('GAME_DATE')]}")
             rs = [r for r in rs if r not in unplayed]
+        today = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d")
+        rs = [r for r in rs if r[h.index("GAME_DATE")] < today]  # only finished days: today's games can be live
         rows += [[season, st] + r for r in rs]
         print(f"  {season} {who} {st}: {len(rs)} rows", flush=True)
         time.sleep(PAUSE)
