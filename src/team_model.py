@@ -222,7 +222,7 @@ if __name__ == "__main__":
             for repl in (0.3, 0.35, 0.4, 0.5):
                 f.set_missing(A - repl * B)
                 mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
-                print(f"{away:>9} | {repl:4.1f} | {mt:9.3f} | {mm:10.3f} | "
+                print(f"{away:>9} | {repl:4.2f} | {mt:9.3f} | {mm:10.3f} | "
                       + ", ".join(f"{x:+.4f}" for x in f.last_extras), flush=True)
         sys.exit()
     if args[0] == "ablate":
@@ -248,9 +248,11 @@ if __name__ == "__main__":
     sys.argv = [sys.argv[0]] + args
     if sys.argv[1] == "tune":
         print("half_life | lam | MAE total | MAE margin   (regular season, " + ", ".join(TUNE_SEASONS) + ")")
-        for hl, lam in itertools.product([45, 60, 90, 120], [0.5, 1, 2, 5]):
+        grid_hl = [float(x) for x in os.environ.get("GRID_HL", "45,60,90,120").split(",")]
+        grid_lam = [float(x) for x in os.environ.get("GRID_LAM", "0.5,1,2,5").split(",")]
+        for hl, lam in itertools.product(grid_hl, grid_lam):
             mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, hl, lam)))
-            print(f"{hl:>9} | {lam:>3} | {mt:9.3f} | {mm:10.3f}", flush=True)
+            print(f"{hl:>9g} | {lam:>3g} | {mt:9.3f} | {mm:10.3f}", flush=True)
     elif sys.argv[1] == "backtest":
         a, b = int(sys.argv[2][:4]), int(sys.argv[3][:4])
         seasons = [f"{y}-{str(y + 1)[2:]}" for y in range(a, b + 1)]
