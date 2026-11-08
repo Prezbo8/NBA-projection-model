@@ -16,6 +16,7 @@ import sys
 import pandas as pd
 
 D = os.path.join(os.path.dirname(__file__), "..", "data", "nbacom")
+TEAMS = {"2003-04": 29}  # Charlotte Bobcats joined in 2004-05
 GAMES = {"2011-12": {66}, "2012-13": {81, 82}, "2020-21": {72}, "2019-20": set(range(63, 76))}
 fails = []
 
@@ -42,10 +43,14 @@ for season, t in teams.groupby("SEASON"):
         row = t[(t.GAME_ID == gid) & (t.TEAM_ID == tid)].iloc[0]
         print(f"     pts mismatch {season} game {gid} {row.MATCHUP} {row.GAME_DATE}: team {row.PTS}, "
               f"players {int(sums.get((gid, tid), 0))} ({int(((p.GAME_ID == gid) & (p.TEAM_ID == tid)).sum())} player rows)")
+    for gid in per_game.index[(per_game != 2) | (home != 1)]:
+        g = t[t.GAME_ID == gid]
+        print(f"     odd game {season} {gid} {g.SEASON_TYPE.iloc[0]} {g.GAME_DATE.iloc[0]}: "
+              f"{len(g)} team rows, matchups {list(g.MATCHUP)}")
     rs = t[t.SEASON_TYPE == "Regular Season"].groupby("TEAM_ABBREVIATION").size()
     want = GAMES.get(season, {82})
     by_type = t.groupby("SEASON_TYPE").GAME_ID.nunique().to_dict()
-    check((per_game == 2).all() and (home == 1).all() and bad_pts == 0 and set(rs.unique()) <= want and len(rs) == 30,
+    check((per_game == 2).all() and (home == 1).all() and bad_pts == 0 and set(rs.unique()) <= want and len(rs) == TEAMS.get(season, 30),
           f"{season}: {len(p):>6,} player rows | games {by_type} | teams {len(rs)} | "
           f"RS games/team {sorted(int(x) for x in rs.unique())} | team-games where player pts != team pts: {bad_pts}")
 

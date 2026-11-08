@@ -9,9 +9,11 @@ on:
     inputs:
       first: {description: "First season", default: "2003-04"}
       last:  {description: "Last season",  default: "2025-26"}
+      from_run: {description: "Reuse the files downloaded by this earlier run id (skips nba.com)", default: ""}
 concurrency: {group: backfill-nbacom, cancel-in-progress: false}
 jobs:
   fetch:
+    if: inputs.from_run == ''
     runs-on: [self-hosted, nba-stats]
     timeout-minutes: 60
     permissions: {contents: read}
@@ -30,9 +32,10 @@ jobs:
 
   load:
     needs: fetch
+    if: always() && (needs.fetch.result == 'success' || (needs.fetch.result == 'skipped' && inputs.from_run != ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    permissions: {contents: write}
+    permissions: {contents: write, actions: read}
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
@@ -42,7 +45,11 @@ jobs:
         with: {python-version: "3.14"}
       - run: pip install -q pandas curl_cffi
       - uses: actions/download-artifact@v8
-        with: {name: nbacom, path: data/nbacom}
+        with:
+          name: nbacom
+          path: data/nbacom
+          run-id: ${{ inputs.from_run || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Check the data
         run: set -o pipefail; python src/check_history.py | tee check.txt
       - name: Commit season files
