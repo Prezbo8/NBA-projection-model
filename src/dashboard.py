@@ -105,7 +105,7 @@ function outs(pl){
 }
 function pills(g){
   return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id))
-    .map(b=>`<div class="paperpill">PAPER ${b.strategy==="v1_total"?"v1 "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
+    .map(b=>`<div class="paperpill">LOGGED ${b.strategy==="v1_total"?"v1 "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
 }
 function games(){
   if(!D.games.length) return '<div class="card" style="padding:14px">No games today.</div>';
