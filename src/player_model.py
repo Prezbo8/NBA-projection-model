@@ -140,6 +140,10 @@ class Context:
             self.missing_min[(gid, tid)] = sum(m for pid, m in pool.items() if pid not in here)
             self.pool_min[(gid, tid)] = sum(m for pid, m in pool.items() if pid in here)
         self.cache = {}
+        # fixed evaluation set for tuning: players at >= 20 expected minutes under a fixed baseline
+        # (min_hl 6, no boost), so every config is graded on the same player-games
+        base, _ = player_features(self.p, self.targets, 6, 120, 150)
+        self.eval_ids = set(self.p.index[self.targets][np.nan_to_num(base[self.targets]) >= 20])
 
 
 def project(ctx, min_hl=MIN_HL, rate_hl=RATE_HL, k=K, boost=BOOST):
@@ -156,7 +160,7 @@ def project(ctx, min_hl=MIN_HL, rate_hl=RATE_HL, k=K, boost=BOOST):
     minutes = np.minimum(em + boost * miss * share, 42.0)
     pace = np.array([ctx.pred_pace.get(gid, np.nan) / ctx.pace.get((gid, tid), np.nan) for gid, tid in gt])
     pace = np.nan_to_num(pace, nan=1.0)
-    out = pd.DataFrame({"game_id": p.GAME_ID.values, "date": p.GAME_DATE.values, "season": p.SEASON.values,
+    out = pd.DataFrame({"row": p.index.values, "game_id": p.GAME_ID.values, "date": p.GAME_DATE.values, "season": p.SEASON.values,
                         "season_type": p.SEASON_TYPE.values, "player_id": p.PLAYER_ID.values,
                         "player": p.PLAYER_NAME.values, "team": p.TEAM_ABBREVIATION.values, "opp": p.OPP.values,
                         "exp_min": minutes.round(1), "min": p.MIN.values})
@@ -171,18 +175,19 @@ def project(ctx, min_hl=MIN_HL, rate_hl=RATE_HL, k=K, boost=BOOST):
     return out
 
 
-def score(out, seasons):
-    d = out[out.season.isin(seasons) & (out.season_type == "Regular Season") & (out.exp_min >= 20)]
+def score(out, seasons, eval_ids=None):
+    d = out[out.season.isin(seasons) & (out.season_type == "Regular Season")]
+    d = d[d.row.isin(eval_ids)] if eval_ids is not None else d[d.exp_min >= 20]
     return {s: (d[f"proj_{s}"] - d[s]).abs().mean() for s in STATS + ["PRA"]}
 
 
 if __name__ == "__main__":
     if sys.argv[1] == "tune":
         ctx = Context(TUNE_SEASONS)
-        print("min_hl | rate_hl | K | boost | MAE (players with exp_min >= 20): " + " ".join(STATS + ["PRA"]))
-        for mh, rh, k, b in itertools.product([4, 8, 15], [60, 120, 240], [50, 150, 400], [0.0, 0.25, 0.5]):
-            m = score(project(ctx, mh, rh, k, b), TUNE_SEASONS)
-            print(f"{mh:>6} | {rh:>7} | {k:>3} | {b:5.1f} | " + " ".join(f"{m[s]:.3f}" for s in STATS + ["PRA"]),
+        print(f"min_hl | rate_hl | K | boost | MAE on {len(ctx.eval_ids):,} fixed player-games: " + " ".join(STATS + ["PRA"]))
+        for mh, rh, k, b in itertools.product([2, 3, 4], [30, 45, 60], [10, 25, 50], [0.0, 0.1, 0.25]):
+            m = score(project(ctx, mh, rh, k, b), TUNE_SEASONS, ctx.eval_ids)
+            print(f"{mh:>6} | {rh:>7} | {k:>3} | {b:5.2f} | " + " ".join(f"{m[s]:.3f}" for s in STATS + ["PRA"]),
                   flush=True)
     elif sys.argv[1] == "backtest":
         a, b = int(sys.argv[2][:4]), int(sys.argv[3][:4])
