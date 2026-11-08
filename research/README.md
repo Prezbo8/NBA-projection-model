@@ -1,8 +1,14 @@
 # Research log: what was tested, and the verdict
 
-Protocol (Nov 8 2026): paper-traded strategies stay frozen. A new idea is judged on the tune seasons
-(2015-16 .. 2020-21) by projection accuracy (MAE); only clear winners get ONE look at the 2021-26 lines,
-and become a new version (v3, ...) with its own paper record. No tuning against betting results.
+Protocol (Nov 8 2026): paper-traded strategies stay frozen. A new idea is judged by projection accuracy (MAE)
+on the tune seasons; only clear winners get ONE look at the test seasons' lines, and become a new version
+(v3, ...) with its own paper record. No tuning against betting results.
+
+Era split (user decision Nov 8 2026: focus on 2021-26, when pace and scoring rose as offenses changed):
+- from now on: **tune 2021-22 .. 2023-24, test 2024-25 .. 2025-26** (+ the live paper record)
+  (`TUNE_SEASONS=2021-22,2022-23,2023-24 python src/team_model.py tune`)
+- the 2015-21 results below are kept as history (the frozen v1 / v2 were tuned there).
+- note: 2022-23 has no saved OPEN totals (Action Network 'open' book missing), so open-line tests use 2023-26.
 
 ## Team model
 | Idea | Verdict | Numbers (tune MAE total / margin; base v1 14.671 / 10.078) |
