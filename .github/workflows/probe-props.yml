@@ -1,0 +1,12 @@
+name: Probe props
+on:
+  workflow_dispatch:
+    inputs:
+      date: {description: "YYYYMMDD", default: "20261107"}
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - run: python3 research/probe_props.py "${{ inputs.date }}"
