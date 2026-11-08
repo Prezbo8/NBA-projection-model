@@ -1,0 +1,4 @@
+date,an_game_id,start_utc,away,home,strategy,side,line,odds,proj,edge,logged_et,away_pts,home_pts,result,units
+2026-11-08,295399,2026-11-09T00:00:00.000Z,UTA,MIN,v1_total,over,224.5,-113,231.8,7.3,2026-11-08 02:00,,,,
+2026-11-08,295400,2026-11-09T00:30:00.000Z,BKN,DAL,v1_total,over,219.5,-110,223.7,4.2,2026-11-08 02:00,,,,
+2026-11-08,295403,2026-11-09T02:00:00.000Z,NOP,LAC,v1_total,over,228.5,-114,231.6,3.1,2026-11-08 02:00,,,,
