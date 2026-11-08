@@ -19,4 +19,5 @@ jobs:
         run: python research/probe_sources.py | tee probe.txt
       - name: Summary
         if: always()
-        run: { echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          { echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
