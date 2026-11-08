@@ -4,7 +4,7 @@ Fails (exit 1) if any check fails. Checks:
   1. every game has exactly 2 team rows: one home + one away, or both away (neutral site:
      international games, NBA Cup semifinals in Las Vegas)
   2. player points summed per team-game == the team's points (catches missing players)
-  3. regular-season games per team match the schedule length (82; 66 in 2011-12; 72 in 2020-21;
+  3. finished seasons (with playoffs): regular-season games per team match the schedule length (82; 66 in 2011-12; 72 in 2020-21;
      2012-13 BOS-IND was cancelled -> 81; 2019-20 bubble season varied 63-75)
   4. LeBron's regular-season GP / PTS per season == nba.com's career page (a separate endpoint)
 
@@ -51,7 +51,7 @@ for season, t in teams.groupby("SEASON"):
     rs = t[t.SEASON_TYPE == "Regular Season"].groupby("TEAM_ABBREVIATION").size()
     want = GAMES.get(season, {82})
     by_type = t.groupby("SEASON_TYPE").GAME_ID.nunique().to_dict()
-    check((per_game == 2).all() and (home <= 1).all() and bad_pts == 0 and set(rs.unique()) <= want and len(rs) == TEAMS.get(season, 30),
+    check((per_game == 2).all() and (home <= 1).all() and bad_pts == 0 and (set(rs.unique()) <= want or "Playoffs" not in by_type) and len(rs) == TEAMS.get(season, 30),
           f"{season}: {len(p):>6,} player rows | games {by_type} | teams {len(rs)} | "
           f"neutral {int((home == 0).sum())} | RS games/team {sorted(int(x) for x in rs.unique())} | team-games where player pts != team pts: {bad_pts}")
 
