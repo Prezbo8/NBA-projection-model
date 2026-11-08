@@ -13,6 +13,7 @@ import sys
 
 import pandas as pd
 
+from gameday import code
 from names import norm
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
@@ -34,6 +35,10 @@ games = read("data/odds/*/*_games.csv.gz")
 props = read("data/odds/*/*_props.csv.gz")
 teams = read("data/nbacom/team_games_*.csv.gz")
 players = read("data/nbacom/player_games_*.csv.gz")
+for df in (games, props):
+    for c in ("away", "home", "team"):
+        if c in df:
+            df[c] = df[c].map(code)   # Action Network codes -> nba.com codes
 teams["date"] = pd.to_datetime(teams.GAME_DATE).dt.strftime("%Y-%m-%d")
 players["date"] = pd.to_datetime(players.GAME_DATE).dt.strftime("%Y-%m-%d")
 print(f"{games.date.nunique()} days of game lines ({games.date.min()} to {games.date.max()}), "
