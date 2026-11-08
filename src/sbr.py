@@ -1,6 +1,6 @@
 """NBA game lines (open/close spread + total, moneyline) from the SportsBookReviewsOnline archive.
 
-The archive covers 2007-08 to about 2022-23. Each game is two rows (V = visitor, H = home):
+The archive covers 2007-08 to January 2023 (later season pages exist but are empty). Each game is two rows (V = visitor, H = home):
   Date | Rot | VH | Team | 1st | 2nd | 3rd | 4th | Final | Open | Close | ML | 2H
 Open / Close hold the spread on the favorite's row and the total on the other row, so the bigger
 number is the total. 'pk' = pick'em (spread 0), 'NL' = no line.
@@ -24,9 +24,8 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 OUT = os.path.join(ROOT, "data", "lines", "sbr_nba.csv")
 URL = "https://www.sportsbookreviewsonline.com/scoresoddsarchives/nba-odds-{}/"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130 Safari/537.36"
-# page slug -> season start year (2020-21 may be just "2021" on the site, as it is for NHL)
-PAGES = {f"{y}-{str(y + 1)[2:]}": y for y in range(2007, 2026)}
-PAGES["2021"] = 2020
+# page slug -> season start year
+PAGES = {f"{y}-{str(y + 1)[2:]}": y for y in range(2007, 2023)}
 
 
 def num(x):
@@ -44,9 +43,10 @@ def split(v, h):
     a, b = num(v), num(h)
     if a is None or b is None:
         return None, None
-    if a > b:   # visitor row has the total -> home row has the spread -> home is the favorite
-        return a, -b
-    return b, a  # home row has the total -> visitor is the favorite -> home gets +spread
+    total, spread = (a, -b) if a > b else (b, a)  # bigger number = total; spread sits on the favorite's row
+    if total < 100:  # archive typo (e.g. a 41.0 "total" in 2022-23): treat as no line
+        return None, None
+    return total, spread
 
 
 def parse(html, start_year):
@@ -56,11 +56,14 @@ def parse(html, start_year):
     cells = [c for c in cells if len(c) >= 12 and c[2] in ("V", "H", "N")]
     out = []
     i = 0
+    year, prev_month = start_year, 0
     while i + 1 < len(cells):
         v, h = cells[i], cells[i + 1]
         i += 2
         mmdd = int(v[0])
-        year = start_year if mmdd >= 800 else start_year + 1
+        if mmdd // 100 < prev_month:  # rows are in date order: month going back (Dec -> Jan) = new year.
+            year += 1                 # (the 2019-20 bubble ran Jul-Oct 2020, so month alone can't tell)
+        prev_month = mmdd // 100
         open_total, open_spread = split(v[9], h[9])
         close_total, close_spread = split(v[10], h[10])
         out.append({
@@ -89,6 +92,14 @@ def fetch_all():
     return pd.DataFrame(rows).drop_duplicates()
 
 
+def same_team(sbr_name, nba_name):
+    if not isinstance(nba_name, str):
+        return False
+    a = sbr_name.replace(" ", "").lower().replace("losangeles", "la")
+    b = nba_name.replace(" ", "").lower().replace("losangeles", "la")
+    return b.startswith(a) or a.startswith(b[:6])
+
+
 def match(sbr):
     """Attach nba.com game_id / team codes by date + final score."""
     t = pd.concat([pd.read_csv(f, dtype={"GAME_ID": str})
@@ -100,14 +111,23 @@ def match(sbr):
     g = g.rename(columns={"GAME_ID": "game_id", "SEASON": "season", "SEASON_TYPE": "season_type",
                           "TEAM_ABBREVIATION_a": "away", "TEAM_ABBREVIATION_h": "home",
                           "PTS_a": "away_pts", "PTS_h": "home_pts"})
+    names = t.drop_duplicates("TEAM_ABBREVIATION", keep="last").set_index("TEAM_ABBREVIATION").TEAM_NAME
     g = g[["game_id", "season", "season_type", "date", "away", "home", "away_pts", "home_pts"]]
+    g["home_name"] = g.home.map(names)
     # neutral games list both teams as away, so each appears twice above: either orientation can match
+    sbr = sbr.reset_index(drop=True).assign(sbr_row=lambda d: d.index)
     m = sbr.merge(g, on=["date", "away_pts", "home_pts"], how="left")
     # two games the same night with the same final score can't be told apart: leave them unmatched
     key = ["date", "away_pts", "home_pts"]
     amb = m.groupby(key).game_id.transform("nunique") > 1
+    # ...unless SBR's home team name points to one of them: 'NewYork' ~ 'New York Knicks', 'LALakers' ~ 'Los Angeles Lakers'
+    same = m.apply(lambda r: same_team(r.sbr_home, r.home_name), axis=1)
+    m = m[~amb | same | ~(same.groupby(m.sbr_row).transform("any"))]  # no name match at all: keep, blank below
+    amb = m.groupby("sbr_row").game_id.transform("nunique") > 1
     m.loc[amb, ["game_id", "season", "season_type", "away", "home"]] = None
-    return m.drop_duplicates(subset=["date", "sbr_away", "sbr_home", "away_pts", "home_pts"]), int(amb.sum())
+    m = m.drop_duplicates("sbr_row")
+    assert len(m) == len(sbr), "every SBR game must appear exactly once"
+    return m, int(amb.sum())
 
 
 def report(m, n_amb):
