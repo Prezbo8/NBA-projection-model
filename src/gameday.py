@@ -50,6 +50,8 @@ unknown = set()
 
 
 def code(name):
+    if not isinstance(name, str):   # missing team (NaN) stays missing
+        return name
     c = CODE.get(name.strip().lower())
     if c is None:
         unknown.add(name)
