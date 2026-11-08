@@ -30,6 +30,9 @@ jobs:
           git diff --cached --quiet || git commit -qm "Research: $CMD"
           for i in 1 2 3 4 5; do git pull --rebase -q && git push && break; sleep $((i * 5)); done
         env: {CMD: "${{ inputs.cmd }}"}
+      - uses: actions/upload-artifact@v7
+        if: always() && hashFiles('docs/**') != ''
+        with: {name: docs, path: docs, retention-days: 7}
       - name: Summary
         if: always()
         run: |
