@@ -176,9 +176,9 @@ if __name__ == "__main__":
         print(f"(half_life {HALF_LIFE}, lam {LAM}) | v1 baseline: MAE total / margin "
               + "%.3f / %.3f" % score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM))), flush=True)
         print("away_days | repl | MAE total | MAE margin | last fit: home, b2b own, b2b opp, miss own, miss opp")
-        for away in (21, 45, 90):
+        for away in (90, 150):
             A, B = availability.team_missing_parts(g, av, away)
-            for repl in (0.0, 0.1, 0.2, 0.3):
+            for repl in (0.3, 0.35, 0.4, 0.5):
                 f.set_missing(A - repl * B)
                 mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
                 print(f"{away:>9} | {repl:4.1f} | {mt:9.3f} | {mm:10.3f} | "
