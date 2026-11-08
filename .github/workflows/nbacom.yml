@@ -1,20 +1,25 @@
-name: Backfill nba.com game logs
+name: nba.com game logs
 
-# Phase 1: full-season player + team game logs from nba.com.
+# Full-season player + team game logs from nba.com (Phase 1 backfill + the daily update).
 #   fetch (Mac runner): only talks to nba.com, uploads the season files as an artifact. Read-only token.
 #   load  (GitHub runner): checks the files, commits them to data/nbacom (the history lives in the repo,
 #         not Supabase: user decision Nov 7 2026).
-# SECURITY: the repo is public, so the Mac job may only be started by hand (never by pull_request).
+# Every morning it refreshes the current season (no dates given = current season). If the Mac is
+# asleep, GitHub keeps the job queued until the Mac runner comes back (up to 24 h).
+# SECURITY: the repo is public, so the Mac job may only be started by schedule or by hand
+# (never by pull_request).
 on:
+  schedule:
+    - cron: "5 14 * * *"   # 9:05 AM EST / 10:05 AM EDT
   workflow_dispatch:
     inputs:
-      first: {description: "First season", default: "2003-04"}
-      last:  {description: "Last season",  default: "2025-26"}
+      first: {description: "First season (empty = current season)", default: ""}
+      last:  {description: "Last season (empty = same as first)", default: ""}
       from_run: {description: "Reuse the files downloaded by this earlier run id (skips nba.com)", default: ""}
 concurrency: {group: backfill-nbacom, cancel-in-progress: false}
 jobs:
   fetch:
-    if: inputs.from_run == ''
+    if: github.event_name == 'schedule' || inputs.from_run == ''
     runs-on: [self-hosted, nba-stats]
     timeout-minutes: 60
     permissions: {contents: read}
@@ -27,13 +32,17 @@ jobs:
       - name: Download from nba.com
         run: |
           rm -rf data/nbacom
-          "$RUNNER_TEMP/venv/bin/python" src/nbacom.py "${{ inputs.first }}" "${{ inputs.last }}"
+          FIRST="${{ inputs.first }}"; LAST="${{ inputs.last }}"
+          [ -z "$FIRST" ] && FIRST=$(python3 -c "import datetime as d; t=d.date.today(); y=t.year if t.month>=8 else t.year-1; print(f'{y}-{str(y+1)[2:]}')")
+          [ -z "$LAST" ] && LAST="$FIRST"
+          "$RUNNER_TEMP/venv/bin/python" src/nbacom.py "$FIRST" "$LAST"
       - uses: actions/upload-artifact@v7
         with: {name: nbacom, path: data/nbacom, retention-days: 7}
 
   load:
     needs: fetch
     if: always() && (needs.fetch.result == 'success' || (needs.fetch.result == 'skipped' && inputs.from_run != ''))
+    env: {TZ: America/New_York}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions: {contents: write, actions: read}
@@ -55,7 +64,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/nbacom
-          git diff --cached --quiet || git commit -m "nba.com game logs ${{ inputs.first }} to ${{ inputs.last }}"
+          git diff --cached --quiet || git commit -m "nba.com game logs ${{ inputs.first || 'current season' }} ${{ inputs.last }}"
           git pull --rebase -q && git push
       - name: Summary
         if: always()
