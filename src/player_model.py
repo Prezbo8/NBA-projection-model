@@ -180,7 +180,7 @@ if __name__ == "__main__":
     if sys.argv[1] == "tune":
         ctx = Context(TUNE_SEASONS)
         print("min_hl | rate_hl | K | boost | MAE (players with exp_min >= 20): " + " ".join(STATS + ["PRA"]))
-        for mh, rh, k, b in itertools.product([4, 8, 15], [60, 120, 240], [50, 150, 400], [0.0, 0.5, 0.8]):
+        for mh, rh, k, b in itertools.product([4, 8, 15], [60, 120, 240], [50, 150, 400], [0.0, 0.25, 0.5]):
             m = score(project(ctx, mh, rh, k, b), TUNE_SEASONS)
             print(f"{mh:>6} | {rh:>7} | {k:>3} | {b:5.1f} | " + " ".join(f"{m[s]:.3f}" for s in STATS + ["PRA"]),
                   flush=True)
