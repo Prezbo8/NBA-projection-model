@@ -1,0 +1,42 @@
+name: Odds (Action Network)
+
+# Saves yesterday's final NBA game lines + player props (data/odds/<season>/), every morning.
+# By hand with first/last dates it backfills a range (days already saved are skipped).
+on:
+  schedule:
+    - cron: "40 13 * * *"   # 8:40 AM EST / 9:40 AM EDT, after every game of the night is final
+  workflow_dispatch:
+    inputs:
+      first: {description: "First date YYYY-MM-DD (empty = yesterday)", default: ""}
+      last:  {description: "Last date YYYY-MM-DD (empty = same as first)", default: ""}
+concurrency: {group: odds, cancel-in-progress: false}
+jobs:
+  odds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    permissions: {contents: write}
+    env: {TZ: America/New_York}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas
+      - name: Download
+        run: |
+          set -o pipefail
+          FIRST="${{ inputs.first }}"; LAST="${{ inputs.last }}"
+          [ -z "$FIRST" ] && FIRST=$(date -d yesterday +%F)
+          [ -z "$LAST" ] && LAST="$FIRST"
+          python src/actionnet.py "$FIRST" "$LAST" | tee odds.txt
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/odds
+          git diff --cached --quiet || git commit -qm "Odds ${{ inputs.first || 'yesterday' }} ${{ inputs.last }}"
+          git pull --rebase -q && git push
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat odds.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
