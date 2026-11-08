@@ -141,7 +141,7 @@ if __name__ == "__main__":
     f = Fitter(g)
     if sys.argv[1] == "tune":
         print("half_life | lam | MAE total | MAE margin   (regular season, " + ", ".join(TUNE_SEASONS) + ")")
-        for hl, lam in itertools.product([30, 45, 60, 90, 150], [5, 20, 50, 100, 200]):
+        for hl, lam in itertools.product([45, 60, 90, 120], [0.5, 1, 2, 5]):
             mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, hl, lam)))
             print(f"{hl:>9} | {lam:>3} | {mt:9.3f} | {mm:10.3f}", flush=True)
     elif sys.argv[1] == "backtest":
