@@ -28,7 +28,10 @@ SLATE = os.path.join(ROOT, "data", "paper", "slate.csv")
 TODAY = os.path.join(ROOT, "docs", "today.json")
 K = {"v1_total": 3.0, "v2_spread": 3.0}
 COLS = ["date", "an_game_id", "start_utc", "away", "home", "strategy", "side", "line", "odds", "proj", "edge",
-        "logged_et", "away_pts", "home_pts", "result", "units"]
+        "logged_et", "open_line", "close_line", "clv", "away_pts", "home_pts", "result", "units"]
+# open_line: the opening line, in the bet's terms (how far it had moved when logged)
+# close_line / clv: the final consensus line (from the morning odds file) and how much better the logged line was
+#   (> 0 = the bet beat the close; the quickest sign of a real edge, long before 100 graded bets)
 
 
 def load(path, cols=None):
@@ -40,6 +43,7 @@ def log():
     now = datetime.now(timezone.utc)
     stamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M")
     trades, slate = load(LOG, COLS), load(SLATE)
+    trades = trades.reindex(columns=COLS)   # older logs lack the newer columns
     have = set(zip(trades.an_game_id.astype(str), trades.strategy))
     seen = set(slate.an_game_id.astype(str)) if len(slate) else set()
     new, new_slate = [], []
@@ -60,7 +64,8 @@ def log():
         if e is not None and abs(e) >= K["v1_total"] and (gid, "v1_total") not in have:
             over = e > 0
             new.append({**base, "strategy": "v1_total", "side": "over" if over else "under", "line": c["total"],
-                        "odds": c["over"] if over else c["under"], "proj": g["v1_total"], "edge": e})
+                        "odds": c["over"] if over else c["under"], "proj": g["v1_total"], "edge": e,
+                        "open_line": g.get("open_total")})
         # v2 spreads (edge > 0 = model likes home vs the line)
         e = g.get("edge_spread")
         if e is not None and abs(e) >= K["v2_spread"] and (gid, "v2_spread") not in have and c.get("spread_home") is not None:
@@ -68,7 +73,9 @@ def log():
             new.append({**base, "strategy": "v2_spread", "side": g["home"] if home else g["away"],
                         "line": c["spread_home"] if home else -c["spread_home"],
                         "odds": c["spread_home_line"] if home else c["spread_away_line"],
-                        "proj": g["proj_spread_home"] if home else -g["proj_spread_home"], "edge": e})
+                        "proj": g["proj_spread_home"] if home else -g["proj_spread_home"], "edge": e,
+                        "open_line": None if g.get("open_spread_home") is None else
+                        (g["open_spread_home"] if home else -g["open_spread_home"])})
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     if new:
         trades = pd.concat([trades, pd.DataFrame(new)], ignore_index=True)
@@ -79,15 +86,16 @@ def log():
 
 
 def grade():
-    trades = load(LOG, COLS)
+    trades = load(LOG, COLS).reindex(columns=COLS)
     open_ = trades.result.isna()
     if not open_.any():
         return
     finals = read_all(os.path.join(ROOT, "data", "odds", "*", "*_games.csv.gz"))
     if not len(finals):
         return
-    finals = finals[(finals.status == "complete")].drop_duplicates("an_game_id")
+    finals = finals[(finals.status == "complete") & (finals.book == "consensus")].drop_duplicates("an_game_id")
     score = {str(r.an_game_id): (r.away_pts, r.home_pts) for r in finals.itertuples()}
+    close = {str(r.an_game_id): (r.total, r.spread_home) for r in finals.itertuples()}
     done = 0
     for i in trades.index[open_]:
         r = trades.loc[i]
@@ -104,6 +112,12 @@ def grade():
         o = float(r.odds) if pd.notna(r.odds) else -110.0
         units = 0.0 if res == 0 else ((o / 100 if o > 0 else 100 / -o) if res > 0 else -1.0)
         trades.loc[i, ["away_pts", "home_pts", "result", "units"]] = [a, h, {1: "W", -1: "L", 0: "P"}[res], round(units, 3)]
+        ct, cs = close[str(r.an_game_id)]
+        if r.strategy == "v1_total" and pd.notna(ct):
+            trades.loc[i, ["close_line", "clv"]] = [ct, (ct - r.line) if r.side == "over" else (r.line - ct)]
+        elif r.strategy == "v2_spread" and pd.notna(cs):
+            c_side = cs if r.side == r.home else -cs
+            trades.loc[i, ["close_line", "clv"]] = [c_side, r.line - c_side]
         done += 1
     trades[COLS].to_csv(LOG, index=False)
     print(f"paper: {done} bets graded")
@@ -116,4 +130,4 @@ if __name__ == "__main__":
     for s, d in t.groupby("strategy"):
         g = d[d.result.notna()]
         print(f"  {s}: {len(d)} logged, {len(g)} graded, {(g.result == 'W').sum()}-{(g.result == 'L').sum()}-"
-              f"{(g.result == 'P').sum()}, {g.units.sum():+.2f} u")
+              f"{(g.result == 'P').sum()}, {g.units.sum():+.2f} u, avg CLV {g.clv.mean():+.2f}")

@@ -152,17 +152,20 @@ function paper(){
   const rec = Object.keys(name).map(s=>{ const b=P.filter(x=>x.strategy===s), g=b.filter(x=>x.result);
     const w=g.filter(x=>x.result==="W").length, l=g.filter(x=>x.result==="L").length, p=g.filter(x=>x.result==="P").length;
     const u=g.reduce((a,x)=>a+(+x.units||0),0), risk=g.filter(x=>x.result!=="P").length;
+    const cl = g.filter(x=>x.clv!=null && x.clv!==""), clv = cl.length ? cl.reduce((a,x)=>a+(+x.clv),0)/cl.length : null;
+    const beat = cl.filter(x=>+x.clv>0).length;
     return `<div class="card">${name[s]}<br><b>${w}-${l}${p?"-"+p:""}</b> · ${u>=0?"+":""}${u.toFixed(2)} u
-      <div class="small">${b.length} logged · ${g.length} graded · ROI ${risk?(u/risk*100).toFixed(1)+"%":"–"}</div></div>`; }).join("");
+      <div class="small">${b.length} logged · ${g.length} graded · ROI ${risk?(u/risk*100).toFixed(1)+"%":"–"}</div>
+      <div class="small">vs closing line: ${clv==null?"–":(clv>=0?"+":"")+clv.toFixed(2)+" pts avg, beat the close "+beat+"/"+cl.length}</div></div>`; }).join("");
   const rows = P.slice().sort((a,b)=>b.start_utc.localeCompare(a.start_utc)).slice(0,200).map(b=>`<tr>
     <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy==="v1_total"?"v1 total":"v2 spread"}</td>
     <td><b>${b.strategy==="v1_total"?b.side+" "+f1(b.line):b.side+" "+sg(b.line)}</b> <span class="small">${b.odds>0?"+":""}${b.odds}</span></td>
-    <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}</td>
+    <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}<br>open ${b.open_line!=null&&b.open_line!==""?(b.strategy==="v1_total"?f1(b.open_line):sg(b.open_line)):"–"}${b.close_line!=null&&b.close_line!==""?" · close "+(b.strategy==="v1_total"?f1(b.close_line):sg(b.close_line)):""}</td>
     <td>${b.result?`<span class="${b.result}">${b.result}</span> <span class="small">${b.away_pts}-${b.home_pts} · ${(+b.units>=0?"+":"")+(+b.units).toFixed(2)}u</span>`:'<span class="small">pending</span>'}</td></tr>`).join("");
   document.getElementById("paper").innerHTML = `<div class="rec">${rec}</div><div class="card"><table><thead><tr><th>Date</th><th>Game</th>
-    <th>Strategy</th><th>Bet (logged line, price)</th><th class="num">Proj</th><th class="num">Edge</th><th>Logged (ET)</th><th>Result</th>
+    <th>Strategy</th><th>Bet (logged line, price)</th><th class="num">Proj</th><th class="num">Edge</th><th>Logged (ET) · open / close</th><th>Result</th>
     </tr></thead><tbody>${rows||'<tr><td colspan="8" class="small">No paper bets yet: they start with the next game-day run.</td></tr>'}</tbody></table></div>
-    <p class="small">Each bet is logged once, at the consensus line and price when it's first flagged, and graded at that price. Judge after 100+ graded bets per strategy.</p>`;
+    <p class="small">Each bet is logged once, at the consensus line and price when it's first flagged, and graded at that price. "vs closing line" (CLV) is how much better the logged line was than the final line: a real edge should beat the close on average, and that shows up long before the win-loss record means anything. Judge the record after 100+ graded bets per strategy.</p>`;
 }
 paper();
 document.querySelector(".switch").addEventListener("click", e=>{ const t=e.target.dataset.tab; if(!t) return;
