@@ -34,17 +34,21 @@ def seasons(first, last):
     return [f"{y}-{str(y + 1)[2:]}" for y in range(a, b + 1)]
 
 
-def get(params, tries=3, url=URL):
+def get_json(url, params, tries=3):
     for i in range(tries):
         try:
             r = cr.get(url, params=params, headers=HEADERS, impersonate="chrome", timeout=60)
             r.raise_for_status()
-            rs = r.json()["resultSets"][0]
-            return rs["headers"], rs["rowSet"]
+            return r.json()
         except Exception as e:
             print(f"  try {i + 1} failed: {type(e).__name__}: {str(e)[:120]}", flush=True)
             time.sleep(15 * (i + 1))
-    raise RuntimeError(f"nba.com failed 3 times: {params}")
+    raise RuntimeError(f"nba.com failed {tries} times: {url} {params}")
+
+
+def get(params, tries=3, url=URL):
+    rs = get_json(url, params, tries)["resultSets"][0]
+    return rs["headers"], rs["rowSet"]
 
 
 def season_log(season, who):
