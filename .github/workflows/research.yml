@@ -1,0 +1,36 @@
+name: Research
+
+# Runs a model / research command on GitHub (nothing runs on the Mac). Prints its output in the run
+# summary; files it writes under data/backtest/ are committed when `commit` is true.
+on:
+  workflow_dispatch:
+    inputs:
+      cmd: {description: "Command, e.g. python src/team_model.py tune", required: true}
+      commit: {description: "Commit data/backtest changes", type: boolean, default: false}
+jobs:
+  research:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions: {contents: write}
+    env: {TZ: America/New_York}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas numpy
+      - name: Run
+        env: {CMD: "${{ inputs.cmd }}"}
+        run: set -o pipefail; bash -c "$CMD" | tee out.txt
+      - name: Commit
+        if: inputs.commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/backtest
+          git diff --cached --quiet || git commit -qm "Research: $CMD"
+          for i in 1 2 3 4 5; do git pull --rebase -q && git push && break; sleep $((i * 5)); done
+        env: {CMD: "${{ inputs.cmd }}"}
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat out.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
