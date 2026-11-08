@@ -4,7 +4,7 @@ Fails (exit 1) if any check fails. Checks:
   1. every game has exactly 2 team rows (one home, one away)
   2. player points summed per team-game == the team's points (catches missing players)
   3. regular-season games per team match the schedule length (82; 66 in 2011-12; 72 in 2020-21;
-     2019-20 bubble season varied 63-75)
+     2012-13 BOS-IND was cancelled -> 81; 2019-20 bubble season varied 63-75)
   4. LeBron's regular-season GP / PTS per season == nba.com's career page (a separate endpoint)
 
   python src/check_history.py
@@ -16,7 +16,7 @@ import sys
 import pandas as pd
 
 D = os.path.join(os.path.dirname(__file__), "..", "data", "nbacom")
-GAMES = {"2011-12": {66}, "2020-21": {72}, "2019-20": set(range(63, 76))}
+GAMES = {"2011-12": {66}, "2012-13": {81, 82}, "2020-21": {72}, "2019-20": set(range(63, 76))}
 fails = []
 
 

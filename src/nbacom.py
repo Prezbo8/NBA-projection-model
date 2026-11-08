@@ -51,6 +51,11 @@ def season_log(season, who):
         h, rs = get({"Counter": 0, "Direction": "ASC", "LeagueID": "00", "PlayerOrTeam": who,
                      "Season": season, "SeasonType": st, "Sorter": "DATE"})
         cols = ["SEASON", "SEASON_TYPE"] + h
+        if who == "T":  # games never played (2012-13 BOS-IND, cancelled) are listed as 0-0: drop them
+            unplayed = [r for r in rs if r[h.index("PTS")] == 0]
+            for r in unplayed:
+                print(f"  dropped unplayed game {r[h.index('GAME_ID')]} {r[h.index('MATCHUP')]} {r[h.index('GAME_DATE')]}")
+            rs = [r for r in rs if r not in unplayed]
         rows += [[season, st] + r for r in rs]
         print(f"  {season} {who} {st}: {len(rs)} rows", flush=True)
         time.sleep(PAUSE)
