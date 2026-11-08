@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-REPL, AWAY_DAYS = 0.20, 45  # defaults; team_model tunes them
+REPL, AWAY_DAYS = 0.30, 90  # tuned Nov 8 2026 on 2015-21 (team_model tune_avail: MAE margin 10.08 -> 9.98)
 SHRINK_MIN, VALUE_DAYS, LAST_N = 100, 365, 10
 
 
