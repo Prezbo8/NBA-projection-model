@@ -1,0 +1,47 @@
+name: Game day
+
+# Snapshots injuries (ESPN), lineups (Rotowire) and refs (official.nba.com) four times a day, and checks
+# that the morning nba.com (Mac) and odds jobs saved yesterday. A source failing 2 runs in a row opens a
+# GitHub issue labeled source-alert; it closes itself when everything works again.
+on:
+  schedule:
+    - cron: "15 16,20,23 * * *"   # 11:15 AM, 3:15 PM, 6:15 PM EST
+    - cron: "15 2 * * *"          # 9:15 PM EST
+  workflow_dispatch: {}
+concurrency: {group: gameday, cancel-in-progress: false}
+jobs:
+  gameday:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions: {contents: write, issues: write}
+    env: {TZ: America/New_York, GH_TOKEN: "${{ github.token }}"}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas
+      - name: Snapshot + health
+        run: python src/gameday.py | tee gameday.txt
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/gameday
+          git diff --cached --quiet || git commit -qm "Game day snapshot $(date +'%Y-%m-%d %H:%M')"
+          git pull --rebase -q && git push
+      - name: Source alert issue
+        run: |
+          gh label create source-alert --color B60205 --description "A data source failed 2+ runs in a row" 2>/dev/null || true
+          bad=$(python3 -c "import json; h=json.load(open('data/gameday/health.json')); print(', '.join(f'{k} ({v} runs)' for k, v in sorted(h.items()) if v >= 2))")
+          open=$(gh issue list --label source-alert --state open --json number -q '.[0].number')
+          if [ -n "$bad" ] && [ -z "$open" ]; then
+            gh issue create --label source-alert --title "Source failing: $bad" --body "$(printf 'Run: %s/%s/actions/runs/%s\n\n```\n%s\n```' "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$(cat gameday.txt)")"
+          elif [ -n "$bad" ]; then
+            gh issue comment "$open" --body "Still failing: $bad ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)"
+          elif [ -n "$open" ]; then
+            gh issue close "$open" --comment "All sources working again ($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          fi
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat gameday.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
