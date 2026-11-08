@@ -50,9 +50,40 @@ def load():
     g = g.sort_values(["TEAM_ID", "date"])
     g["rest"] = g.groupby("TEAM_ID").date.diff().dt.days     # NaN for a team's first game in the data
     g["b2b"] = g.rest.eq(1)
-    opp_b2b = g[["GAME_ID", "TEAM_ID", "b2b"]].rename(columns={"TEAM_ID": "OPP_ID", "b2b": "opp_b2b"})
-    g = g.merge(opp_b2b, on=["GAME_ID", "OPP_ID"])
+    # experimental features (v3 candidates; v1/v2 don't use them)
+    g["rested"] = g.rest.ge(3) & g.rest.le(10)                 # 2+ days off (not the season's first game)
+    day = (g.date - pd.Timestamp("2000-01-01")).dt.days
+    prev2 = g.groupby("TEAM_ID").date.shift(2)
+    g["three4"] = ((g.date - prev2).dt.days <= 3).fillna(False)  # 3rd game in 4 nights
+    loc = g.apply(lambda r: r.TEAM_ABBREVIATION if r.is_home or r.neutral else r.OPP, axis=1)  # where it's played
+    lat, lon = loc.map(lambda t: ARENA.get(t, (np.nan, np.nan))[0]), loc.map(lambda t: ARENA.get(t, (np.nan, np.nan))[1])
+    plat, plon = lat.groupby(g.TEAM_ID).shift(1), lon.groupby(g.TEAM_ID).shift(1)
+    g["travel"] = (km(plat, plon, lat, lon) / 1000).where(g.rest.le(10), 0).fillna(0)  # 1000s of km since last game
+    del day
+    feats = ["b2b", "rested", "three4", "travel"]
+    opp = g[["GAME_ID", "TEAM_ID"] + feats].rename(columns={"TEAM_ID": "OPP_ID", **{c: f"opp_{c}" for c in feats}})
+    g = g.merge(opp, on=["GAME_ID", "OPP_ID"])
     return g.sort_values(["date", "GAME_ID", "TEAM_ID"]).reset_index(drop=True)
+
+
+def km(lat1, lon1, lat2, lon2):
+    """Great-circle distance in km."""
+    p1, p2 = np.radians(lat1), np.radians(lat2)
+    dl = np.radians(lon2 - lon1)
+    a = np.sin((p2 - p1) / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dl / 2) ** 2
+    return 6371 * 2 * np.arcsin(np.sqrt(a))
+
+
+# arena locations (city level) by nba.com abbreviation, incl. old franchises
+ARENA = {"ATL": (33.76, -84.39), "BOS": (42.37, -71.06), "BKN": (40.68, -73.97), "NJN": (40.73, -74.17),
+         "CHA": (35.23, -80.84), "CHI": (41.88, -87.67), "CLE": (41.50, -81.69), "DAL": (32.79, -96.81),
+         "DEN": (39.75, -105.0), "DET": (42.34, -83.06), "GSW": (37.77, -122.39), "HOU": (29.75, -95.36),
+         "IND": (39.76, -86.16), "LAC": (34.04, -118.27), "LAL": (34.04, -118.27), "MEM": (35.14, -90.05),
+         "MIA": (25.78, -80.19), "MIL": (43.04, -87.92), "MIN": (44.98, -93.28), "NOP": (29.95, -90.08),
+         "NOH": (29.95, -90.08), "NOK": (35.46, -97.52), "NYK": (40.75, -73.99), "OKC": (35.46, -97.52),
+         "SEA": (47.62, -122.35), "ORL": (28.54, -81.38), "PHI": (39.90, -75.17), "PHX": (33.45, -112.07),
+         "POR": (45.53, -122.67), "SAC": (38.58, -121.50), "SAS": (29.43, -98.44), "TOR": (43.64, -79.38),
+         "UTA": (40.77, -111.90), "WAS": (38.90, -77.02)}
 
 
 def ridge(X, y, w, penalized, lam):
@@ -79,6 +110,13 @@ class Fitter:
         self.poss = g.poss.to_numpy()
         self.ppp = g.ppp.to_numpy()
         self.miss = self.opp_miss = None   # set_missing() turns on the v2 availability terms
+        self.feat = np.zeros((len(g), 0))  # set_features() adds experimental terms (v3 candidates)
+        self.pace_hl = None                # None: pace uses the same half-life as ppp
+
+    def set_features(self, cols):
+        """Extra unpenalized ppp terms, e.g. ['rested', 'opp_rested', 'three4', 'opp_three4', 'travel', 'opp_travel']."""
+        self.feat_cols = list(cols)
+        self.feat = self.g[self.feat_cols].to_numpy(float) if cols else np.zeros((len(self.g), 0))
 
     def set_missing(self, own):
         """own: missing value per row. The opponent's value comes from the other row of the same game."""
@@ -91,13 +129,14 @@ class Fitter:
         m = (self.day < day) & (self.day >= day - WINDOW)
         n, rows = self.n, np.flatnonzero(m)
         w = 0.5 ** ((day - self.day[rows]) / half_life)
+        wp = w if self.pace_hl is None else 0.5 ** ((day - self.day[rows]) / self.pace_hl)
         k = len(rows)
         # pace: intercept + one 'pace' vector used for both team and opponent
         Xp = np.zeros((k, 1 + n))
         Xp[:, 0] = 1
         Xp[np.arange(k), 1 + self.team[rows]] += 1
         Xp[np.arange(k), 1 + self.opp[rows]] += 1
-        bp = ridge(Xp, self.poss[rows], w, np.r_[0, np.ones(n)], lam)
+        bp = ridge(Xp, self.poss[rows], wp, np.r_[0, np.ones(n)], lam)
         # ppp: intercept + off[team] + def[opp] + home + b2b_own + b2b_opp
         extra = self.extras(rows)
         Xo = np.zeros((k, 1 + 2 * n))
@@ -114,7 +153,7 @@ class Fitter:
         cols = [self.home[rows], self.b2b[rows], self.opp_b2b[rows]]
         if self.miss is not None:
             cols += [self.miss[rows], self.opp_miss[rows]]
-        return np.column_stack(cols)
+        return np.column_stack(cols + [self.feat[rows, i] for i in range(self.feat.shape[1])])
 
     def predict(self, rows, bp, bo):
         n = self.n
@@ -183,6 +222,24 @@ if __name__ == "__main__":
                 mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
                 print(f"{away:>9} | {repl:4.1f} | {mt:9.3f} | {mm:10.3f} | "
                       + ", ".join(f"{x:+.4f}" for x in f.last_extras), flush=True)
+        sys.exit()
+    if args[0] == "ablate":
+        # each idea alone and together, on v1 (no availability) and v2; scored on the tune seasons only
+        rest = ["rested", "opp_rested", "three4", "opp_three4"]
+        trav = ["travel", "opp_travel"]
+        configs = [("base", [], None), ("+rest", rest, None), ("+travel", trav, None),
+                   ("+pace_hl 180", [], 180), ("+pace_hl 365", [], 365), ("+rest+travel", rest + trav, None),
+                   ("+rest+travel+pace_hl 180", rest + trav, 180)]
+        print("version | config | MAE total | MAE margin | last fit extras (home, b2b, b2b opp, [miss], features...)")
+        for ver in ("v1", "v2"):
+            if ver == "v2":
+                with_missing(g, f)
+            for name, cols, phl in configs:
+                f.set_features(cols)
+                f.pace_hl = phl
+                mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
+                print(f"{ver} | {name:<26} | {mt:9.3f} | {mm:10.3f} | " + ", ".join(f"{x:+.4f}" for x in f.last_extras),
+                      flush=True)
         sys.exit()
     if not v1 and args[0] in ("tune", "backtest"):
         with_missing(g, f)
