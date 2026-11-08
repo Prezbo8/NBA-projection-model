@@ -65,7 +65,7 @@ footer{margin-top:16px;font-size:12px;color:var(--muted)}
 </div></div>
 <div class="wrap">
   <div class="banner"><b>Paper trading only. No real bets.</b> The focus is <b>game totals</b>: v1 beat the <i>opening</i>
-    total 55.4% in 2023-26 (1,713 bets with edge &ge; 3, +96.9 u at -110) but lost to the closing line, so plays are logged
+    total 55.2% in 2023-26 (1,785 bets with edge &ge; 3, +97.4 u at -110; the line then moved toward the model 63% of the time) but lost to the closing line, so plays are logged
     at the line when first flagged and judged by closing-line value. Spreads (v2) are untested; props have no edge.</div>
   <div class="switch"><button class="on" data-tab="games">Totals</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
   <div id="games"></div>
