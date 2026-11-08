@@ -18,14 +18,21 @@ def get(types, date):
         return json.load(f)
 
 
-d = get(GUESSES, "20261107")
-print("valid market names:", {k: v["name"] for k, v in d.get("market_rules", {}).items()})
-for book, m in d["markets"].items():
-    print(" book", book, {k: len(v) for k, v in m["event"].items()})
-rows = d["markets"]["15"]["event"].get("core_bet_type_27_points", [])[:2]
-print("sample consensus points rows:", json.dumps(rows)[:800])
-print("player sample:", json.dumps(d["players"][0])[:300])
-print("options:", json.dumps(d["market_rules"].get("core_bet_type_27_points", {}).get("rules", {}).get("options")))
+valid = {}
+for g in GUESSES:
+    try:
+        x = get([g], "20261107")
+        n = len(x["markets"].get("15", {}).get("event", {}).get(g, []))
+        print(g, "->", x.get("market_rules", {}).get(g, {}).get("name"), "| consensus rows", n, flush=True)
+        if n:
+            valid[g] = x
+    except Exception as e:
+        print(g, "ERROR", e, flush=True)
+d = valid.get("core_bet_type_27_points")
+if d:
+    print("sample consensus points rows:", json.dumps(d["markets"]["15"]["event"]["core_bet_type_27_points"][:2])[:800])
+    print("player sample:", json.dumps(d["players"][0])[:300])
+    print("options:", json.dumps(d["market_rules"]["core_bet_type_27_points"]["rules"]["options"]))
 
 for date in ["20261020", "20260401", "20251107", "20250115", "20240115", "20230115", "20220115", "20210115"]:
     try:
