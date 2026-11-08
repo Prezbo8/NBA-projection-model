@@ -30,6 +30,7 @@ Era split (user decision Nov 8 2026: focus on 2021-26, when pace and scoring ros
 | P(over) with fitted outcome variance | adopted for display only | still overconfident; market no-vig better calibrated (Brier .243 vs .255) |
 
 ## Ideas not yet tested (need new data)
-- Referees (totals: fouls / free throws): historical crews need ~1 nba.com request per game via the Mac runner;
-  game-day snapshots record refs from Nov 8 2026 on.
+- Referees (totals: fouls / free throws): backfill STOPPED by the user Nov 8 2026 (low expected value; the market
+  prices crews). Saved: data/refs 2015-16 .. 2018-19 complete, 2019-20 partial. refs.yml is disabled (Actions >
+  nba.com referees > Enable to resume; it skips saved games). Game-day snapshots still record refs from Nov 8 2026 on.
 - Player-based team ratings (lineup / on-off or RAPM-style), roster-based preseason priors.
