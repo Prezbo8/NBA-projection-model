@@ -1,0 +1,29 @@
+name: Backfill SBR lines
+
+# Phase 1: NBA open/close spreads + totals + moneylines from the SBR archive (2007-08 to ~2022-23),
+# matched to nba.com games. Runs on GitHub's runner (SBR answers cloud IPs). Commits data/lines/.
+on:
+  workflow_dispatch: {}
+jobs:
+  sbr:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions: {contents: write}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas
+      - name: Download + match + check
+        run: set -o pipefail; python src/sbr.py | tee sbr.txt
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/lines
+          git diff --cached --quiet || git commit -m "SBR NBA lines"
+          git pull --rebase -q && git push
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat sbr.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
