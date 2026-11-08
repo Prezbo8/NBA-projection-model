@@ -14,16 +14,19 @@ jobs:
       - name: Python env (throwaway venv; nothing installed into the Mac's Python)
         run: |
           python3 -m venv "$RUNNER_TEMP/venv"
-          "$RUNNER_TEMP/venv/bin/pip" install -q requests
-      - name: Probe nba.com
+          "$RUNNER_TEMP/venv/bin/pip" install -q requests curl_cffi
+      - name: Probe nba.com (plain requests, then Chrome-like connection)
         run: |
-          "$RUNNER_TEMP/venv/bin/python" -I -c "
+          {
+            "$RUNNER_TEMP/venv/bin/python" -I -c "
           import sys; sys.path.insert(0, 'research')
           import probe_sources as p
           for s in p.SOURCES:
               if 'nba.com' in s[1] and 'official' not in s[1]:
                   print(p.probe(*s), flush=True)
-          " | tee probe.txt
+          "
+            "$RUNNER_TEMP/venv/bin/python" research/probe_nba_chrome.py
+          } | tee probe.txt
       - name: Summary
         if: always()
         run: |
