@@ -7,7 +7,6 @@ Regular season only.
 
   python research/props_vs_lines.py
 """
-import glob
 import os
 import sys
 
@@ -17,7 +16,7 @@ import pandas as pd
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from gameday import code  # noqa: E402
-from names import norm  # noqa: E402
+from names import norm, read_all  # noqa: E402
 
 MARKETS = {"pts": "PTS", "reb": "REB", "ast": "AST", "fg3m": "FG3M", "stl": "STL", "blk": "BLK",
            "pra": "PRA", "pr": "PR", "pa": "PA", "ra": "RA", "stocks": "STOCKS"}
@@ -33,8 +32,7 @@ pr = pd.read_csv(os.path.join(ROOT, "data", "backtest", "player_preds.csv.gz"), 
 pr = pr[pr.season_type == "Regular Season"]
 pr["key"] = pr.player.map(norm)
 
-files = sorted(glob.glob(os.path.join(ROOT, "data", "odds", "*", "*_props.csv.gz")))
-props = pd.concat([pd.read_csv(f) for f in files if os.path.getsize(f) > 30], ignore_index=True)
+props = read_all(os.path.join(ROOT, "data", "odds", "*", "*_props.csv.gz"))
 props = props[props.book.isin(["consensus", "open"]) & props.over.notna() & props.under.notna()]
 props["team"] = props.team.map(code)
 props["key"] = props.player.map(norm)

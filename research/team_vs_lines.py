@@ -7,7 +7,6 @@ Win% vs 52.4% (break-even at -110) and units at -110. Regular season only.
 
   python research/team_vs_lines.py
 """
-import glob
 import os
 import sys
 
@@ -16,6 +15,7 @@ import pandas as pd
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 from gameday import code  # noqa: E402  (team names -> nba.com codes)
+from names import read_all  # noqa: E402
 
 TUNE = {"2015-16", "2016-17", "2017-18", "2018-19", "2019-20", "2020-21"}
 KS = [0, 1, 2, 3, 4, 5, 6, 8]
@@ -29,13 +29,9 @@ sbr = sbr.rename(columns={"close_total": "c_total", "open_total": "o_total",
                           "home": "l_home"})[["game_id", "l_home", "c_total", "o_total", "c_spread", "o_spread"]]
 sbr["src"] = "SBR"
 
-an = []
-for f in glob.glob(os.path.join(ROOT, "data", "odds", "*", "*_games.csv.gz")):
-    d = pd.read_csv(f)
-    if len(d):
-        an.append(d[d.book.isin(["consensus", "open"])])
-if an:
-    a = pd.concat(an)
+a = read_all(os.path.join(ROOT, "data", "odds", "*", "*_games.csv.gz"))
+if len(a):
+    a = a[a.book.isin(["consensus", "open"])].copy()
     a["home"], a["away"] = a.home.map(code), a.away.map(code)
     a = a.pivot_table(index=["date", "away", "home"], columns="book", values=["total", "spread_home"], aggfunc="first")
     a.columns = [f"{v}_{b}" for v, b in a.columns]

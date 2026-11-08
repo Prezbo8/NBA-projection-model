@@ -7,14 +7,13 @@
 
   python src/check_odds.py
 """
-import glob
 import os
 import sys
 
 import pandas as pd
 
 from gameday import code
-from names import norm
+from names import norm, read_all
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 fails = []
@@ -27,8 +26,7 @@ def check(ok, msg):
 
 
 def read(pattern):
-    files = sorted(glob.glob(os.path.join(ROOT, pattern)))
-    return pd.concat([pd.read_csv(f) for f in files if os.path.getsize(f) > 30], ignore_index=True) if files else pd.DataFrame()
+    return read_all(os.path.join(ROOT, pattern))
 
 
 games = read("data/odds/*/*_games.csv.gz")

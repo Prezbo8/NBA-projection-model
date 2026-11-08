@@ -110,10 +110,15 @@ def props(d, teams_of):
     return out
 
 
-def save(rows, path):
+PROP_COLS = ["date", "an_game_id", "away", "home", "an_player_id", "player", "team", "market", "book", "line",
+             "over", "under"]
+
+
+def save(rows, path, cols=None):
+    """cols: header to write even when there are no rows (an empty file breaks readers)."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with gzip.GzipFile(path, "wb", mtime=0) as gz, io.TextIOWrapper(gz) as f:  # mtime=0: stable bytes
-        pd.DataFrame(rows).to_csv(f, index=False)
+        pd.DataFrame(rows, columns=cols).to_csv(f, index=False)
 
 
 def day(d):
@@ -132,7 +137,7 @@ def day(d):
     p = props(d, teams_of) if want_props else []
     save(g, gpath)
     if want_props:
-        save(p, ppath)
+        save(p, ppath, PROP_COLS)
     return f"{len(teams_of)} games, {len(g)} game-line rows, {len(p)} prop rows"
 
 
