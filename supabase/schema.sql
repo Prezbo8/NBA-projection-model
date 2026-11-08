@@ -14,6 +14,7 @@ create table if not exists nba_player_games (
   player_name  text,
   team_id      int, team text, opp text,
   home         boolean,
+  neutral      boolean,              -- both teams listed away: international games, NBA Cup semis
   wl           text,
   min real, fgm int, fga int, fg3m int, fg3a int, ftm int, fta int,
   oreb int, dreb int, reb int, ast int, stl int, blk int, tov int, pf int, pts int, plus_minus int,
@@ -31,6 +32,7 @@ create table if not exists nba_team_games (
   game_date    date not null,
   team text, opp text,
   home         boolean,
+  neutral      boolean,              -- both teams listed away: international games, NBA Cup semis
   wl           text,
   min real, fgm int, fga int, fg3m int, fg3a int, ftm int, fta int,
   oreb int, dreb int, reb int, ast int, stl int, blk int, tov int, pf int, pts int, plus_minus int,

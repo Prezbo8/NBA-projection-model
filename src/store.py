@@ -22,13 +22,15 @@ STATS = ["min", "fgm", "fga", "fg3m", "fg3a", "ftm", "fta", "oreb", "dreb", "reb
 
 
 def tidy(df, player):
-    """nba.com columns -> table columns; opp/home come from MATCHUP ('CLE vs. BOS' home, 'CLE @ BOS' away)."""
+    """nba.com columns -> table columns; opp/home come from MATCHUP ('CLE vs. BOS' home, 'CLE @ BOS' away);
+    a game where both teams are listed as away is a neutral site (international games, NBA Cup semifinals)."""
     df = df.rename(columns=str.lower).rename(columns={"team_abbreviation": "team"})
     df["home"] = df.matchup.str.contains(" vs. ")
+    df["neutral"] = ~df.home.groupby(df.game_id).transform("any")  # both teams listed as away ('@')
     df["opp"] = df.matchup.str[-3:]
     df["game_date"] = pd.to_datetime(df.game_date).dt.strftime("%Y-%m-%d")
     keys = ["game_id", "player_id", "player_name"] if player else ["game_id"]
-    cols = keys + ["team_id", "team", "opp", "season", "season_type", "game_date", "home", "wl"] + STATS
+    cols = keys + ["team_id", "team", "opp", "season", "season_type", "game_date", "home", "neutral", "wl"] + STATS
     return df[cols]
 
 

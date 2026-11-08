@@ -1,7 +1,8 @@
 """Checks the nba.com season files in data/nbacom before they are committed / loaded.
 
 Fails (exit 1) if any check fails. Checks:
-  1. every game has exactly 2 team rows (one home, one away)
+  1. every game has exactly 2 team rows: one home + one away, or both away (neutral site:
+     international games, NBA Cup semifinals in Las Vegas)
   2. player points summed per team-game == the team's points (catches missing players)
   3. regular-season games per team match the schedule length (82; 66 in 2011-12; 72 in 2020-21;
      2012-13 BOS-IND was cancelled -> 81; 2019-20 bubble season varied 63-75)
@@ -45,14 +46,14 @@ for season, t in teams.groupby("SEASON"):
               f"players {int(sums.get((gid, tid), 0))} ({int(((p.GAME_ID == gid) & (p.TEAM_ID == tid)).sum())} player rows)")
     for gid in per_game.index[(per_game != 2) | (home != 1)]:
         g = t[t.GAME_ID == gid]
-        print(f"     odd game {season} {gid} {g.SEASON_TYPE.iloc[0]} {g.GAME_DATE.iloc[0]}: "
+        print(f"     {'neutral' if len(g) == 2 and home[gid] == 0 else 'BAD'} game {season} {gid} {g.SEASON_TYPE.iloc[0]} {g.GAME_DATE.iloc[0]}: "
               f"{len(g)} team rows, matchups {list(g.MATCHUP)}")
     rs = t[t.SEASON_TYPE == "Regular Season"].groupby("TEAM_ABBREVIATION").size()
     want = GAMES.get(season, {82})
     by_type = t.groupby("SEASON_TYPE").GAME_ID.nunique().to_dict()
-    check((per_game == 2).all() and (home == 1).all() and bad_pts == 0 and set(rs.unique()) <= want and len(rs) == TEAMS.get(season, 30),
+    check((per_game == 2).all() and (home <= 1).all() and bad_pts == 0 and set(rs.unique()) <= want and len(rs) == TEAMS.get(season, 30),
           f"{season}: {len(p):>6,} player rows | games {by_type} | teams {len(rs)} | "
-          f"RS games/team {sorted(int(x) for x in rs.unique())} | team-games where player pts != team pts: {bad_pts}")
+          f"neutral {int((home == 0).sum())} | RS games/team {sorted(int(x) for x in rs.unique())} | team-games where player pts != team pts: {bad_pts}")
 
 lbj = pd.read_csv(f"{D}/check_lebron_career.csv.gz")
 lbj = lbj[lbj.TEAM_ABBREVIATION != "TOT"].groupby("SEASON_ID")[["GP", "PTS"]].sum()
