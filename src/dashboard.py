@@ -1,7 +1,7 @@
 """Build docs/index.html (GitHub Pages dashboard) from docs/today.json.
 
-Projections only: no bet calls until the backtests show an edge (team v1/v2 lost to closing lines;
-props verdict pending). Styling follows the NHL dashboard (same palette, light + dark).
+Totals first (user, Nov 8 2026): the v1 total and its play (edge >= 3, paper-traded) lead; spreads are
+a secondary column and props the last tab (no edge). Styling follows the NHL dashboard (same palette, light + dark).
 
   python src/dashboard.py
 """
@@ -64,10 +64,10 @@ footer{margin-top:16px;font-size:12px;color:var(--muted)}
   <div class="stats" id="stats"></div>
 </div></div>
 <div class="wrap">
-  <div class="banner"><b>Paper trading only. No real bets.</b> Backtests: the team model loses to closing lines; v1 totals
-    beat <i>opening</i> lines ~53-54% (streaky), so they're paper-traded at the line when first flagged. v2's injury
-    signal can't be tested on past games, so it's paper-traded too. Props: no edge (lines beat the model in every market).</div>
-  <div class="switch"><button class="on" data-tab="games">Games</button><button data-tab="props">Props</button><button data-tab="paper">Paper record</button></div>
+  <div class="banner"><b>Paper trading only. No real bets.</b> The focus is <b>game totals</b>: v1 beat the <i>opening</i>
+    total 55.4% in 2023-26 (1,713 bets with edge &ge; 3, +96.9 u at -110) but lost to the closing line, so plays are logged
+    at the line when first flagged and judged by closing-line value. Spreads (v2) are untested; props have no edge.</div>
+  <div class="switch"><button class="on" data-tab="games">Totals</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
   <div id="games"></div>
   <div id="props" hidden>
     <div class="banner" style="border-left-color:var(--muted)">Backtest 2023-26 (500k+ props): the market's line beat the model in
@@ -89,7 +89,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 const MK = {pts:"PTS",reb:"REB",ast:"AST",fg3m:"3PM",pra:"PRA",pr:"P+R",pa:"P+A",ra:"R+A",stl:"STL",blk:"BLK",stocks:"STL+BLK"};
 
 document.getElementById("sub").textContent = `${D.date} · updated ${D.generated_et} ET · team ${D.model?.team||""} · props ${D.model?.props||""}`;
-document.getElementById("stats").innerHTML = [["Games",D.games.length],["Props with lines",D.props.length]]
+const PLAY = 3;   // v1 total edge that gets paper-traded (paper.py K["v1_total"])
+const plays = D.games.filter(g=>g.v1_edge_total!=null && Math.abs(g.v1_edge_total)>=PLAY);
+const v1g = (D.paper||[]).filter(b=>b.strategy==="v1_total" && b.result);
+document.getElementById("stats").innerHTML = [["Games",D.games.length],["Totals plays (edge ≥ 3)",plays.length],
+  ["v1 totals paper",`${v1g.filter(b=>b.result==="W").length}-${v1g.filter(b=>b.result==="L").length}`]]
   .map(([k,v])=>`<div class="stat">${k}<b>${v}</b></div>`).join("");
 
 function outs(pl){
@@ -108,14 +112,14 @@ function games(){
   const rows = D.games.slice().sort((a,b)=>a.start_utc.localeCompare(b.start_utc)).map(g=>`<tr>
     <td><span class="time">${ET(g.start_utc)}</span></td>
     <td class="mu"><b>${g.away}</b>${g.away_b2b?'<span class="b2b">B2B</span>':""} @ <b>${g.home}</b>${g.home_b2b?'<span class="b2b">B2B</span>':""}
-      <div class="small">${f1(g.proj_away)} – ${f1(g.proj_home)} · pace ${f1(g.proj_pace)}</div></td>
-    <td class="num"><b>${f1(g.proj_total)}</b></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
-    <td class="num"><span class="edge ${ecls(g.edge_total,2,4,6)}">${sg(g.edge_total)}</span><div class="small">${g.edge_total>0?"over":g.edge_total<0?"under":""} · v1 ${sg(g.v1_edge_total)}</div>${pills(g)}</td>
-    <td class="num"><b>${g.home} ${sg(g.proj_spread_home)}</b></td><td class="num">${sg(g.spread_home)}<div class="small">open ${sg(g.open_spread_home)}</div></td>
-    <td class="num"><span class="edge ${ecls(g.edge_spread,1.5,3,4.5)}">${sg(g.edge_spread)}</span><div class="small">${g.edge_spread>0?g.home:g.edge_spread<0?g.away:""}</div></td>
+      <div class="small">${f1(g.v1_away)} – ${f1(g.v1_home)} · pace ${f1(g.proj_pace)}</div></td>
+    <td class="num"><b>${f1(g.v1_total)}</b><div class="small">v2 ${f1(g.proj_total)}</div></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
+    <td class="num"><span class="edge ${ecls(g.v1_edge_total,1.5,PLAY,6)}">${sg(g.v1_edge_total)}</span><div class="small">v2 ${sg(g.edge_total)}</div></td>
+    <td>${g.v1_edge_total!=null&&Math.abs(g.v1_edge_total)>=PLAY?`<b>${g.v1_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</b>`:'<span class="small">pass</span>'}${pills(g)}</td>
+    <td class="num hide-m">${g.home} ${sg(g.proj_spread_home)}<div class="small">line ${sg(g.spread_home)} · edge ${sg(g.edge_spread)}</div></td>
     <td class="hide-m"><span class="out"><b>${g.away}</b> ${outs(g.away_players)}</span><span class="out"><b>${g.home}</b> ${outs(g.home_players)}</span></td></tr>`).join("");
-  return `<div class="card"><table><thead><tr><th>Time</th><th>Matchup · proj score</th><th class="num">Proj total</th>
-    <th class="num">Line</th><th class="num">Edge</th><th class="num">Proj spread</th><th class="num">Line</th><th class="num">Edge</th>
+  return `<div class="card"><table><thead><tr><th>Time</th><th>Matchup · v1 proj score</th><th class="num">Proj total (v1)</th>
+    <th class="num">Total line</th><th class="num">Edge (v1)</th><th>Play</th><th class="num hide-m">Spread (v2, secondary)</th>
     <th class="hide-m">Injuries (Rotowire / ESPN)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 document.getElementById("games").innerHTML = games();
