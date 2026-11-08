@@ -1,0 +1,60 @@
+name: Backfill nba.com game logs
+
+# Phase 1: full-season player + team game logs from nba.com.
+#   fetch (Mac runner): only talks to nba.com, uploads the season files as an artifact. Read-only token.
+#   load  (GitHub runner): checks the files, commits them to data/nbacom, loads Supabase (if secrets set).
+# SECURITY: the repo is public, so the Mac job may only be started by hand (never by pull_request).
+on:
+  workflow_dispatch:
+    inputs:
+      first: {description: "First season", default: "2003-04"}
+      last:  {description: "Last season",  default: "2025-26"}
+concurrency: {group: backfill-nbacom, cancel-in-progress: false}
+jobs:
+  fetch:
+    runs-on: [self-hosted, nba-stats]
+    timeout-minutes: 60
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Python env (throwaway venv; nothing installed into the Mac's Python)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q curl_cffi
+      - name: Download from nba.com
+        run: |
+          rm -rf data/nbacom
+          "$RUNNER_TEMP/venv/bin/python" src/nbacom.py "${{ inputs.first }}" "${{ inputs.last }}"
+      - uses: actions/upload-artifact@v7
+        with: {name: nbacom, path: data/nbacom, retention-days: 7}
+
+  load:
+    needs: fetch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: {contents: write}
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas curl_cffi
+      - uses: actions/download-artifact@v8
+        with: {name: nbacom, path: data/nbacom}
+      - name: Check the data
+        run: set -o pipefail; python src/check_history.py | tee check.txt
+      - name: Commit season files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nbacom
+          git diff --cached --quiet || git commit -m "nba.com game logs ${{ inputs.first }} to ${{ inputs.last }}"
+          git pull --rebase -q && git push
+      - name: Load Supabase
+        run: python src/store.py "${{ inputs.first }}" "${{ inputs.last }}"
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat check.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
