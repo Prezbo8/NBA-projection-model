@@ -1,14 +1,19 @@
-"""Team model v1: projected points for both teams in every game -> total, spread, team totals.
+"""Team model v2: projected points for both teams in every game -> total, spread, team totals.
 
 Before each game day, two weighted ridge regressions are refit on earlier games only (no look-ahead):
   pace:  game possessions        = mu_p + pace[team] + pace[opp]
   ppp:   team points / possession = mu + off[team] + def[opp] + home*(home, not neutral)
                                      + b2b_own*(team on a back-to-back) + b2b_opp*(opp on a back-to-back)
+                                     + miss_own*(team's missing value) + miss_opp*(opp's missing value)
+Missing value (src/availability.py) = expected minutes x (Game Score/min - replacement) of regulars who
+aren't playing. Fitted jointly with the ratings, so team ratings mean "at full strength" (v1 had no
+availability terms; `--v1` reproduces it).
 Recent games weigh more (0.5 ** (age_days / half_life)); team terms are shrunk toward 0 by `lam`.
 Projected points = pace * ppp. Teams are nba.com TEAM_IDs (stable through Seattle->OKC, NJ->BKN).
 
   python src/team_model.py tune                       # grid of half_life x lam on 2015-16 .. 2020-21
-  python src/team_model.py backtest 2007-08 2026-27   # writes data/backtest/team_preds.csv
+  python src/team_model.py tune_avail                 # grid of replacement x away_days on 2015-16 .. 2020-21
+  python src/team_model.py backtest 2007-08 2026-27   # writes data/backtest/team_preds.csv (add --v1 for v1)
 """
 import glob
 import itertools
@@ -18,10 +23,13 @@ import sys
 import numpy as np
 import pandas as pd
 
+import availability
+
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 PREDS = os.path.join(ROOT, "data", "backtest", "team_preds.csv")
 HALF_LIFE, LAM = 90, 5    # tuned Nov 8 2026 on 2015-21 (MAE total 14.67, margin 10.08)
 WINDOW = 400              # days of history in each fit (older games have ~0 weight anyway)
+REPL, AWAY_DAYS = availability.REPL, availability.AWAY_DAYS
 TUNE_SEASONS = ["2015-16", "2016-17", "2017-18", "2018-19", "2019-20", "2020-21"]
 
 
@@ -70,6 +78,13 @@ class Fitter:
         self.opp_b2b = g.opp_b2b.to_numpy(float)
         self.poss = g.poss.to_numpy()
         self.ppp = g.ppp.to_numpy()
+        self.miss = self.opp_miss = None   # set_missing() turns on the v2 availability terms
+
+    def set_missing(self, own):
+        """own: missing value per row. The opponent's value comes from the other row of the same game."""
+        key = dict(zip(zip(self.g.GAME_ID, self.g.TEAM_ID), own))
+        self.miss = np.asarray(own, float)
+        self.opp_miss = np.array([key[(gid, o)] for gid, o in zip(self.g.GAME_ID, self.g.OPP_ID)])
 
     def fit(self, day, half_life, lam):
         """Ratings from games before `day` (days since 2000-01-01)."""
@@ -84,20 +99,27 @@ class Fitter:
         Xp[np.arange(k), 1 + self.opp[rows]] += 1
         bp = ridge(Xp, self.poss[rows], w, np.r_[0, np.ones(n)], lam)
         # ppp: intercept + off[team] + def[opp] + home + b2b_own + b2b_opp
-        Xo = np.zeros((k, 1 + 2 * n + 3))
+        extra = self.extras(rows)
+        Xo = np.zeros((k, 1 + 2 * n))
         Xo[:, 0] = 1
         Xo[np.arange(k), 1 + self.team[rows]] = 1
         Xo[np.arange(k), 1 + n + self.opp[rows]] = 1
-        Xo[:, -3], Xo[:, -2], Xo[:, -1] = self.home[rows], self.b2b[rows], self.opp_b2b[rows]
+        Xo = np.hstack([Xo, extra])
         # lam works like `lam` (weighted) pseudo-games at league average: unit-free, same for both fits
-        bo = ridge(Xo, self.ppp[rows], w, np.r_[0, np.ones(2 * n), 0, 0, 0], lam)
+        bo = ridge(Xo, self.ppp[rows], w, np.r_[0, np.ones(2 * n), np.zeros(extra.shape[1])], lam)
         return bp, bo
+
+    def extras(self, rows):
+        """Unpenalized terms: home, b2b own/opp, and (v2) missing own/opp."""
+        cols = [self.home[rows], self.b2b[rows], self.opp_b2b[rows]]
+        if self.miss is not None:
+            cols += [self.miss[rows], self.opp_miss[rows]]
+        return np.column_stack(cols)
 
     def predict(self, rows, bp, bo):
         n = self.n
         pace = bp[0] + bp[1 + self.team[rows]] + bp[1 + self.opp[rows]]
-        ppp = (bo[0] + bo[1 + self.team[rows]] + bo[1 + n + self.opp[rows]]
-               + bo[-3] * self.home[rows] + bo[-2] * self.b2b[rows] + bo[-1] * self.opp_b2b[rows])
+        ppp = bo[0] + bo[1 + self.team[rows]] + bo[1 + n + self.opp[rows]] + self.extras(rows) @ bo[1 + 2 * n:]
         return pace, ppp
 
 
@@ -111,6 +133,7 @@ def run(g, f, seasons, half_life, lam):
         bp, bo = f.fit(day, half_life, lam)
         pace, ppp = f.predict(rows, bp, bo)
         out[rows], pace_out[rows] = pace * ppp, pace
+    f.last_extras = bo[1 + 2 * f.n:]  # home, b2b own/opp, (miss own/opp) from the last fit
     return out, pace_out
 
 
@@ -136,9 +159,34 @@ def score(p):
             (p.pred_margin - (p.home_pts - p.away_pts)).abs().mean())
 
 
+def with_missing(g, f, repl=REPL, away_days=AWAY_DAYS):
+    av = availability.Availability(availability.load_players())
+    A, B = availability.team_missing_parts(g, av, away_days)
+    f.set_missing(A - repl * B)
+    return av
+
+
 if __name__ == "__main__":
     g = load()
     f = Fitter(g)
+    v1 = "--v1" in sys.argv
+    args = [a for a in sys.argv[1:] if a != "--v1"]
+    if args[0] == "tune_avail":
+        av = availability.Availability(availability.load_players())
+        print(f"(half_life {HALF_LIFE}, lam {LAM}) | v1 baseline: MAE total / margin "
+              + "%.3f / %.3f" % score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM))), flush=True)
+        print("away_days | repl | MAE total | MAE margin | last fit: home, b2b own, b2b opp, miss own, miss opp")
+        for away in (21, 45, 90):
+            A, B = availability.team_missing_parts(g, av, away)
+            for repl in (0.0, 0.1, 0.2, 0.3):
+                f.set_missing(A - repl * B)
+                mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
+                print(f"{away:>9} | {repl:4.1f} | {mt:9.3f} | {mm:10.3f} | "
+                      + ", ".join(f"{x:+.4f}" for x in f.last_extras), flush=True)
+        sys.exit()
+    if not v1 and args[0] in ("tune", "backtest"):
+        with_missing(g, f)
+    sys.argv = [sys.argv[0]] + args
     if sys.argv[1] == "tune":
         print("half_life | lam | MAE total | MAE margin   (regular season, " + ", ".join(TUNE_SEASONS) + ")")
         for hl, lam in itertools.product([45, 60, 90, 120], [0.5, 1, 2, 5]):
@@ -155,4 +203,6 @@ if __name__ == "__main__":
         for s, d in p.groupby("season"):
             mt, mm = score(d)
             print(f"{s}: {len(d)} games | MAE total {mt:.2f} | MAE margin {mm:.2f}")
-        print(f"wrote {len(p):,} games to {PREDS} (half_life {hl}, lam {lam})")
+        print(f"wrote {len(p):,} games to {PREDS} ({'v1' if v1 else f'v2: repl {REPL}, away_days {AWAY_DAYS}'}, "
+              f"half_life {hl}, lam {lam}) | last fit: home, b2b own, b2b opp(, miss own, miss opp) = "
+              + ", ".join(f"{x:+.4f}" for x in f.last_extras))
