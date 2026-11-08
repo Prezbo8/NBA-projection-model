@@ -82,3 +82,18 @@ for kind in ("total", "spread"):
                 n, w, u = bets(d.dropna(subset=[f"{when}_{kind}"]), kind, when, k)
                 cells.append(f"{n:>5} {w / n:5.1%} {u:+6.1f}" if n else f"{'-':>16}")
             print(f"{name:<15} | " + " | ".join(cells))
+
+
+print("\nSEASON BY SEASON (edge >= 3 / >= 4): bets win% units")
+for kind in ("total", "spread"):
+    for when, label in (("o", "open"), ("c", "close")):
+        print(f"{kind} vs {label}:")
+        for sname, d in m.groupby("season"):
+            d = d.dropna(subset=[f"{when}_{kind}"])
+            if not len(d):
+                continue
+            cells = []
+            for k in (3, 4):
+                n, w, u = bets(d, kind, when, k)
+                cells.append(f"{n:>4} {w / n:5.1%} {u:+6.1f}" if n else "   -")
+            print(f"  {sname}: " + " | ".join(cells))

@@ -34,11 +34,15 @@ pr["key"] = pr.player.map(norm)
 
 props = read_all(os.path.join(ROOT, "data", "odds", "*", "*_props.csv.gz"))
 props = props[props.book.isin(["consensus", "open"]) & props.over.notna() & props.under.notna()]
-props["team"] = props.team.map(code)
+# Action Network tags players with their CURRENT team (Jaylen Brown = PHI even in 2023 BOS games), so
+# match on date + name, and require the nba.com team to be one of the two teams in that game
+for c in ("away", "home"):
+    props[c] = props[c].map(code)
 props["key"] = props.player.map(norm)
 props["stat"] = props.market.map(MARKETS)
 
-m = props.merge(pr, on=["date", "team", "key"])
+m = props.drop(columns=["team"]).merge(pr, on=["date", "key"])
+m = m[(m.team == m.away) | (m.team == m.home)]
 matched = m.drop_duplicates(["date", "an_player_id"]).shape[0] / props.drop_duplicates(["date", "an_player_id"]).shape[0]
 print(f"{len(props):,} consensus/open prop lines; {matched:.1%} of player-days matched to a player who played "
       f"(the rest mostly didn't play: void bets)\n")

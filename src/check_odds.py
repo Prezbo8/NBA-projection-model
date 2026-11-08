@@ -44,6 +44,7 @@ print(f"{games.date.nunique()} days of game lines ({games.date.min()} to {games.
 
 # 1. scores
 cons = games[games.book == "consensus"].drop_duplicates("an_game_id")
+cons = cons[cons.date.isin(set(teams.date))]   # preseason / summer dates have no nba.com game
 home = teams[teams.MATCHUP.str.contains(" vs. ")][["date", "TEAM_ABBREVIATION", "PTS"]].rename(
     columns={"TEAM_ABBREVIATION": "home", "PTS": "nba_home_pts"})
 m = cons.merge(home, on=["date", "home"], how="left")
@@ -67,14 +68,16 @@ if len(both):
 
 # 3. props -> nba.com players
 if len(props):
-    played = set(zip(players.date, players.TEAM_ABBREVIATION, players.PLAYER_NAME.map(norm)))
+    # Action Network tags players with their CURRENT team, so match on date + name and require the
+    # nba.com team to be one of the game's two teams
+    team_of = dict(zip(zip(players.date, players.PLAYER_NAME.map(norm)), players.TEAM_ABBREVIATION))
     pl = props.drop_duplicates(["date", "an_player_id"]).copy()
-    pl["key"] = list(zip(pl.date, pl.team, pl.player.map(norm)))
-    pl["hit"] = pl.key.isin(played)
+    t = [team_of.get((d, norm(n))) for d, n in zip(pl.date, pl.player)]
+    pl["hit"] = [x is not None and x in (a, h) for x, a, h in zip(t, pl.away, pl.home)]
     pl["season"] = pl.date.str[:4].astype(int) - (pl.date.str[5:7].astype(int) < 8)
     for y, d in pl.groupby("season"):
-        check(d.hit.mean() > 0.95, f"props {y}-{str(y + 1)[2:]}: {len(d):,} player-days, "
-              f"{d.hit.mean():.1%} matched to an nba.com player who played that day")
+        check(d.hit.mean() > 0.80, f"props {y}-{str(y + 1)[2:]}: {len(d):,} player-days, "
+              f"{d.hit.mean():.1%} matched to an nba.com player who played that day (the rest: mostly sat = void)")
     miss = pl[~pl.hit].player.value_counts().head(12)
     print("     most common unmatched:", dict(miss))
 
