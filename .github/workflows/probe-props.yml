@@ -3,10 +3,11 @@ on:
   workflow_dispatch:
     inputs:
       date: {description: "YYYYMMDD", default: "20261107"}
+      script: {description: "research script", default: "probe_props.py"}
 jobs:
   probe:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
-      - run: python3 research/probe_props.py "${{ inputs.date }}"
+      - run: python3 "research/${{ inputs.script }}" "${{ inputs.date }}"
