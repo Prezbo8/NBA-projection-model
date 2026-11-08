@@ -403,9 +403,9 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0020700401,2007-08,Regular Season,2007-12-23,HOU,DET,82.0,94.0,183.0,183.5,-7.5,-7.5,290.0,-350.0,Houston,Detroit,False
 0020700403,2007-08,Regular Season,2007-12-23,ORL,BOS,91.0,103.0,192.5,193.0,-8.5,-9.5,460.0,-560.0,Orlando,Boston,False
 0020700404,2007-08,Regular Season,2007-12-23,DEN,SAC,106.0,105.0,208.0,210.5,-3.0,-3.5,150.0,-170.0,Denver,Sacramento,False
-,,,2007-12-24,,,79.0,89.0,197.5,201.5,-7.5,-7.0,290.0,-350.0,Seattle,Portland,False
-,,,2007-12-24,,,115.0,122.0,220.5,222.5,2.0,1.5,-135.0,115.0,Phoenix,LALakers,False
-,,,2007-12-24,,,82.0,96.0,194.0,194.0,-4.5,-4.5,180.0,-210.0,Miami,Cleveland,False
+0020700407,2007-08,Regular Season,2007-12-24,SEA,POR,79.0,89.0,197.5,201.5,-7.5,-7.0,290.0,-350.0,Seattle,Portland,False
+0020700406,2007-08,Regular Season,2007-12-24,PHX,LAL,115.0,122.0,220.5,222.5,2.0,1.5,-135.0,115.0,Phoenix,LALakers,False
+0020700405,2007-08,Regular Season,2007-12-24,MIA,CLE,82.0,96.0,194.0,194.0,-4.5,-4.5,180.0,-210.0,Miami,Cleveland,False
 0020700418,2007-08,Regular Season,2007-12-26,MIN,GSW,101.0,105.0,208.0,212.0,-12.5,-12.5,700.0,-1000.0,Minnesota,GoldenState,False
 0020700416,2007-08,Regular Season,2007-12-26,DAL,UTA,90.0,99.0,204.0,203.5,-2.0,-3.5,150.0,-170.0,Dallas,Utah,False
 0020700415,2007-08,Regular Season,2007-12-26,MIL,DEN,105.0,125.0,209.0,210.5,-8.0,-8.5,355.0,-425.0,Milwaukee,Denver,False
@@ -2625,7 +2625,7 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0040800305,2008-09,Playoffs,2009-05-28,ORL,CLE,102.0,112.0,190.5,191.0,-7.5,-7.5,350.0,-415.0,Orlando,Cleveland,False
 0040800316,2008-09,Playoffs,2009-05-29,LAL,DEN,119.0,92.0,208.0,209.5,-6.0,-5.5,180.0,-220.0,LALakers,Denver,False
 0040800306,2008-09,Playoffs,2009-05-30,CLE,ORL,90.0,103.0,190.5,192.5,-0.0,-2.0,115.0,-135.0,Cleveland,Orlando,False
-,,,2009-06-03,,,75.0,100.0,206.0,206.0,-6.0,-6.0,240.0,-280.0,Orlando,LALakers,False
+0040800401,2008-09,Playoffs,2009-06-03,ORL,LAL,75.0,100.0,206.0,206.0,-6.0,-6.0,240.0,-280.0,Orlando,LALakers,False
 0040800402,2008-09,Playoffs,2009-06-07,ORL,LAL,96.0,101.0,203.5,202.0,-7.0,-6.5,260.0,-320.0,Orlando,LALakers,False
 0040800403,2008-09,Playoffs,2009-06-09,LAL,ORL,104.0,108.0,199.5,198.5,-3.5,-5.0,175.0,-210.0,LALakers,Orlando,False
 0040800404,2008-09,Playoffs,2009-06-11,LAL,ORL,99.0,91.0,203.5,200.5,-3.5,-1.5,100.0,-120.0,LALakers,Orlando,False
@@ -3906,7 +3906,7 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0040900176,2009-10,Playoffs,2010-04-30,DEN,UTA,104.0,112.0,218.0,215.0,-3.5,-6.5,240.0,-280.0,Denver,Utah,False
 0040900201,2009-10,Playoffs,2010-05-01,BOS,CLE,93.0,101.0,193.0,192.0,-7.5,-7.0,320.0,-380.0,Boston,Cleveland,False
 0040900127,2009-10,Playoffs,2010-05-02,MIL,ATL,74.0,95.0,187.0,185.5,-8.5,-8.5,400.0,-600.0,Milwaukee,Atlanta,False
-,,,2010-05-03,,,99.0,104.0,202.0,198.5,-8.0,-6.5,310.0,-380.0,Utah,LALakers,False
+0040900231,2009-10,Playoffs,2010-05-03,UTA,LAL,99.0,104.0,202.0,198.5,-8.0,-6.5,310.0,-380.0,Utah,LALakers,False
 0040900221,2009-10,Playoffs,2010-05-03,SAS,PHX,102.0,111.0,202.0,205.0,-4.5,-4.5,180.0,-220.0,SanAntonio,Phoenix,False
 0040900202,2009-10,Playoffs,2010-05-03,BOS,CLE,104.0,86.0,192.0,192.5,-6.5,-6.0,260.0,-320.0,Boston,Cleveland,False
 0040900232,2009-10,Playoffs,2010-05-04,UTA,LAL,103.0,111.0,199.0,198.5,-6.5,-5.5,245.0,-290.0,Utah,LALakers,False
@@ -4373,11 +4373,11 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0021000430,2010-11,Regular Season,2010-12-23,SAS,ORL,101.0,123.0,199.5,198.5,-2.5,-2.0,110.0,-130.0,SanAntonio,Orlando,False
 0021000431,2010-11,Regular Season,2010-12-23,MIL,SAC,84.0,79.0,185.5,183.5,1.0,2.5,-135.0,115.0,Milwaukee,Sacramento,False
 0021000432,2010-11,Regular Season,2010-12-23,MIA,PHX,95.0,83.0,209.0,208.0,6.0,5.0,-230.0,190.0,Miami,Phoenix,False
-,,,2010-12-24,,,106.0,114.0,213.5,213.5,-6.5,-6.5,230.0,-270.0,Denver,OklahomaCity,False
-,,,2010-12-24,,,96.0,80.0,196.0,194.0,-3.0,-3.5,150.0,-170.0,Miami,LALakers,False
-,,,2010-12-24,,,102.0,109.0,198.0,202.5,-3.0,-3.0,130.0,-150.0,Portland,GoldenState,False
-,,,2010-12-24,,,95.0,103.0,207.0,207.0,-1.5,-2.5,120.0,-140.0,Chicago,NewYork,False
-,,,2010-12-24,,,78.0,86.0,193.5,191.0,-1.5,-2.5,120.0,-140.0,Boston,Orlando,False
+0021000436,2010-11,Regular Season,2010-12-24,DEN,OKC,106.0,114.0,213.5,213.5,-6.5,-6.5,230.0,-270.0,Denver,OklahomaCity,False
+0021000435,2010-11,Regular Season,2010-12-24,MIA,LAL,96.0,80.0,196.0,194.0,-3.0,-3.5,150.0,-170.0,Miami,LALakers,False
+0021000437,2010-11,Regular Season,2010-12-24,POR,GSW,102.0,109.0,198.0,202.5,-3.0,-3.0,130.0,-150.0,Portland,GoldenState,False
+0021000433,2010-11,Regular Season,2010-12-24,CHI,NYK,95.0,103.0,207.0,207.0,-1.5,-2.5,120.0,-140.0,Chicago,NewYork,False
+0021000434,2010-11,Regular Season,2010-12-24,BOS,ORL,78.0,86.0,193.5,191.0,-1.5,-2.5,120.0,-140.0,Boston,Orlando,False
 0021000438,2010-11,Regular Season,2010-12-26,PHX,LAC,103.0,108.0,211.0,207.5,-1.0,-0.0,-110.0,-110.0,Phoenix,LAClippers,False
 0021000439,2010-11,Regular Season,2010-12-26,MIN,CLE,98.0,97.0,210.0,209.0,-2.0,-2.0,115.0,-135.0,Minnesota,Cleveland,False
 0021000440,2010-11,Regular Season,2010-12-26,CHI,DET,95.0,92.0,189.0,190.0,4.5,4.5,-215.0,175.0,Chicago,Detroit,False
@@ -16701,7 +16701,7 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0022000034,2020-21,Regular Season,2020-12-27,SAS,NOP,95.0,98.0,226.5,227.5,-5.5,-5.0,170.0,-190.0,SanAntonio,NewOrleans,False
 0022000031,2020-21,Regular Season,2020-12-27,DAL,LAC,124.0,73.0,230.0,226.5,-4.5,-3.0,140.0,-160.0,Dallas,LAClippers,False
 0022000032,2020-21,Regular Season,2020-12-27,BKN,CHA,104.0,106.0,224.0,233.0,7.5,11.5,-600.0,450.0,Brooklyn,Charlotte,False
-,,,2020-12-28,,,91.0,127.0,224.0,229.0,-11.0,-10.5,400.0,-500.0,Minnesota,LALakers,False
+0022000040,2020-21,Regular Season,2020-12-28,MIN,LAL,91.0,127.0,224.0,229.0,-11.0,-10.5,400.0,-500.0,Minnesota,LALakers,False
 0022000042,2020-21,Regular Season,2020-12-28,MEM,BKN,116.0,111.0,235.0,227.5,-7.0,1.5,-125.0,105.0,Memphis,Brooklyn,False
 0022000041,2020-21,Regular Season,2020-12-28,DET,ATL,120.0,128.0,226.5,223.5,-8.5,-10.5,400.0,-500.0,Detroit,Atlanta,False
 0022000043,2020-21,Regular Season,2020-12-28,UTA,OKC,110.0,109.0,221.0,218.0,5.0,9.0,-400.0,330.0,Utah,OklahomaCity,False
@@ -19152,7 +19152,7 @@ game_id,season,season_type,date,away,home,away_pts,home_pts,open_total,close_tot
 0042100306,2021-22,Playoffs,2022-05-27,MIA,BOS,111.0,103.0,200.0,201.5,-9.0,-8.5,330.0,-400.0,Miami,Boston,False
 0042100307,2021-22,Playoffs,2022-05-29,BOS,MIA,100.0,96.0,200.5,198.0,2.5,3.0,-150.0,130.0,Boston,Miami,False
 0042100401,2021-22,Playoffs,2022-06-02,BOS,GSW,120.0,108.0,210.5,214.0,-2.0,-3.5,145.0,-165.0,Boston,GoldenState,False
-,,,2022-06-06,,,88.0,107.0,212.5,213.5,-3.5,-5.0,175.0,-200.0,Boston,GoldenState,False
+0042100402,2021-22,Playoffs,2022-06-06,BOS,GSW,88.0,107.0,212.5,213.5,-3.5,-5.0,175.0,-200.0,Boston,GoldenState,False
 0042100403,2021-22,Playoffs,2022-06-08,GSW,BOS,100.0,116.0,212.5,214.5,-2.5,-3.5,135.0,-155.0,GoldenState,Boston,False
 0042100404,2021-22,Playoffs,2022-06-10,GSW,BOS,107.0,97.0,212.5,213.5,-2.5,-4.0,145.0,-165.0,GoldenState,Boston,False
 0042100405,2021-22,Playoffs,2022-06-13,BOS,GSW,94.0,104.0,212.5,211.0,-3.5,-4.0,145.0,-165.0,Boston,Golden State,False
