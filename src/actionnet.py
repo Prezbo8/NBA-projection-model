@@ -2,7 +2,7 @@
 
 Action Network still serves lines for past dates: game lines (spread / total / ML / team totals,
 public + money %) back to at least 2022-23, player props for every book from about Jan 2025 and
-consensus-only in 2023-24. Book 15 = consensus (the closing line), book 30 = opening line.
+consensus-only in 2023-24 (none before: props are only requested from PROPS_FROM on). Book 15 = consensus (the closing line), book 30 = opening line.
 
 Writes one pair of files per day with games:
   data/odds/<season>/<YYYY-MM-DD>_games.csv.gz   one row per game per book
@@ -41,6 +41,7 @@ GAME_COLS = ["spread_home", "spread_home_line", "spread_away_line", "total", "ov
              "spread_home_public", "spread_home_money", "total_over_public", "total_over_money",
              "ml_home_public", "ml_home_money"]
 PAUSE = 1.0
+PROPS_FROM = date(2023, 10, 1)  # Action Network has no props for older dates: don't ask (11 requests/day)
 
 
 def get(path, tries=3):
@@ -119,7 +120,8 @@ def day(d):
     """Save one finished day. Skips today and later, days with no games, and days already saved."""
     folder = os.path.join(ROOT, "data", "odds", season_of(d))
     gpath, ppath = (os.path.join(folder, f"{d.isoformat()}_{k}.csv.gz") for k in ("games", "props"))
-    if os.path.exists(gpath) and os.path.exists(ppath):
+    want_props = d >= PROPS_FROM
+    if os.path.exists(gpath) and (os.path.exists(ppath) or not want_props):
         return "already saved"
     if d >= datetime.now(ZoneInfo("America/New_York")).date():  # (postponed games never turn 'complete')
         return "not over yet: only days before today (ET) are saved"
@@ -127,9 +129,10 @@ def day(d):
     time.sleep(PAUSE)
     if not teams_of:
         return "no games"
-    p = props(d, teams_of)
+    p = props(d, teams_of) if want_props else []
     save(g, gpath)
-    save(p, ppath)
+    if want_props:
+        save(p, ppath)
     return f"{len(teams_of)} games, {len(g)} game-line rows, {len(p)} prop rows"
 
 
