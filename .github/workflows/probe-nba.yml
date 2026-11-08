@@ -1,0 +1,30 @@
+name: Probe nba.com (Mac runner)
+
+# Runs on the self-hosted Mac runner (home IP), because nba.com blocks GitHub's cloud runners.
+# SECURITY: the repo is public, so jobs on the Mac runner may only be started by schedule or by hand,
+# never by pull_request (that would let anyone's fork run code on the Mac).
+on:
+  workflow_dispatch: {}
+jobs:
+  probe:
+    runs-on: [self-hosted, nba-stats]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Python env (throwaway venv; nothing installed into the Mac's Python)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q requests
+      - name: Probe nba.com
+        run: |
+          "$RUNNER_TEMP/venv/bin/python" -I -c "
+          import sys; sys.path.insert(0, 'research')
+          import probe_sources as p
+          for s in p.SOURCES:
+              if 'nba.com' in s[1] and 'official' not in s[1]:
+                  print(p.probe(*s), flush=True)
+          " | tee probe.txt
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
