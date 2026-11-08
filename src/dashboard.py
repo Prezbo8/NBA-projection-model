@@ -51,6 +51,10 @@ td.num,th.num{text-align:right}
 .e2{background:color-mix(in srgb,var(--accent) 32%,transparent)}.e3{background:color-mix(in srgb,var(--accent) 52%,transparent)}
 .lean{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .out{display:block;font-size:12px;white-space:normal;max-width:300px}.out .x{color:var(--neg);font-weight:700}
+.paperpill{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--gold);color:#111;margin-top:3px}
+.rec{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}.rec .card{padding:10px 14px;min-width:220px}.rec b{font-size:18px}
+.W{color:var(--pos);font-weight:800}.L{color:var(--neg);font-weight:800}.P{color:var(--muted);font-weight:800}
+.lean0{background:color-mix(in srgb,var(--muted) 16%,transparent)}
 footer{margin-top:16px;font-size:12px;color:var(--muted)}
 @media (max-width:760px){.hide-m{display:none}td,th{padding:6px 5px}table{font-size:12.5px}.chips input{min-width:120px;margin-left:0}}
 </style></head><body>
@@ -60,14 +64,18 @@ footer{margin-top:16px;font-size:12px;color:var(--muted)}
   <div class="stats" id="stats"></div>
 </div></div>
 <div class="wrap">
-  <div class="banner"><b>Projections only. No bet calls yet.</b> In backtests the team model has not beaten closing lines
-    (2007-2026), and the props verdict is pending. Edges here are the model's opinion, not picks.</div>
-  <div class="switch"><button class="on" data-tab="games">Games</button><button data-tab="props">Props</button></div>
+  <div class="banner"><b>Paper trading only. No real bets.</b> Backtests: the team model loses to closing lines; v1 totals
+    beat <i>opening</i> lines ~53-54% (streaky), so they're paper-traded at the line when first flagged. v2's injury
+    signal can't be tested on past games, so it's paper-traded too. Props: no edge (lines beat the model in every market).</div>
+  <div class="switch"><button class="on" data-tab="games">Games</button><button data-tab="props">Props</button><button data-tab="paper">Paper record</button></div>
   <div id="games"></div>
   <div id="props" hidden>
+    <div class="banner" style="border-left-color:var(--muted)">Backtest 2023-26 (500k+ props): the market's line beat the model in
+      every market, and real over rates track the market's price, not the model's. The lean column is the model's opinion only.</div>
     <div class="chips" id="mkts"></div>
     <div class="card"><table id="pt"></table></div>
   </div>
+  <div id="paper" hidden></div>
   <footer id="foot"></footer>
 </div>
 <script>
@@ -91,6 +99,10 @@ function outs(pl){
     + (q.length?`${o.length?"<br>":""}<span class="small">Questionable: ${q.map(p=>esc(p.player)+" ("+pct(1-p.p_out)+")").join(", ")}</span>`:"")
     || '<span class="small">nobody listed</span>';
 }
+function pills(g){
+  return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id))
+    .map(b=>`<div class="paperpill">PAPER ${b.strategy==="v1_total"?"v1 "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
+}
 function games(){
   if(!D.games.length) return '<div class="card" style="padding:14px">No games today.</div>';
   const rows = D.games.slice().sort((a,b)=>a.start_utc.localeCompare(b.start_utc)).map(g=>`<tr>
@@ -98,7 +110,7 @@ function games(){
     <td class="mu"><b>${g.away}</b>${g.away_b2b?'<span class="b2b">B2B</span>':""} @ <b>${g.home}</b>${g.home_b2b?'<span class="b2b">B2B</span>':""}
       <div class="small">${f1(g.proj_away)} – ${f1(g.proj_home)} · pace ${f1(g.proj_pace)}</div></td>
     <td class="num"><b>${f1(g.proj_total)}</b></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
-    <td class="num"><span class="edge ${ecls(g.edge_total,2,4,6)}">${sg(g.edge_total)}</span><div class="small">${g.edge_total>0?"over":g.edge_total<0?"under":""}</div></td>
+    <td class="num"><span class="edge ${ecls(g.edge_total,2,4,6)}">${sg(g.edge_total)}</span><div class="small">${g.edge_total>0?"over":g.edge_total<0?"under":""} · v1 ${sg(g.v1_edge_total)}</div>${pills(g)}</td>
     <td class="num"><b>${g.home} ${sg(g.proj_spread_home)}</b></td><td class="num">${sg(g.spread_home)}<div class="small">open ${sg(g.open_spread_home)}</div></td>
     <td class="num"><span class="edge ${ecls(g.edge_spread,1.5,3,4.5)}">${sg(g.edge_spread)}</span><div class="small">${g.edge_spread>0?g.home:g.edge_spread<0?g.away:""}</div></td>
     <td class="hide-m"><span class="out"><b>${g.away}</b> ${outs(g.away_players)}</span><span class="out"><b>${g.home}</b> ${outs(g.home_players)}</span></td></tr>`).join("");
@@ -125,19 +137,37 @@ function props(){
     <td>${MK[p.market]}</td><td class="num"><b>${f1(p.proj)}</b></td>
     <td class="num">${f1(p.line)}<div class="small">${p.over>0?"+":""}${p.over} / ${p.under>0?"+":""}${p.under}${p.open_line!=null&&p.open_line!==p.line?" · open "+f1(p.open_line):""}</div></td>
     <td class="num">${pct(p.p_over)}</td><td class="num">${pct(p.mkt_over)}</td>
-    <td class="num"><span class="edge ${ecls(p.gap*100,4,8,12)}">${sg(p.gap*100)}</span></td>
+    <td class="num"><span class="edge lean0">${sg(p.gap*100)}</span></td>
     <td><span class="lean">${p.gap>0?"OVER":p.gap<0?"UNDER":"–"}</span></td>
     <td class="hide-m">${best?`${best.book} ${best.odds>0?"+":""}${best.odds}`:'<span class="small">–</span>'}</td></tr>`; }).join("");
   document.getElementById("pt").innerHTML = `<thead><tr><th class="sort" data-s="name">Player</th><th>Market</th><th class="num">Proj</th>
     <th class="num">Line (consensus)</th><th class="num">Model over</th><th class="num">Market over (no vig)</th>
-    <th class="num sort" data-s="gap">Gap (pts)</th><th>Lean</th><th class="hide-m">Best price at this line</th></tr></thead>
+    <th class="num sort" data-s="gap">Model lean (pts, no proven edge)</th><th>Lean</th><th class="hide-m">Best price at this line</th></tr></thead>
     <tbody>${rows || '<tr><td colspan="9" class="small">No props match.</td></tr>'}</tbody>`;
   document.querySelectorAll("#pt th.sort").forEach(th=>th.onclick=()=>{ sortKey=th.dataset.s; props(); });
 }
 props();
+function paper(){
+  const P = D.paper||[], name = {v1_total:"v1 totals (edge ≥ 3)", v2_spread:"v2 spreads, injury signal (edge ≥ 3)"};
+  const rec = Object.keys(name).map(s=>{ const b=P.filter(x=>x.strategy===s), g=b.filter(x=>x.result);
+    const w=g.filter(x=>x.result==="W").length, l=g.filter(x=>x.result==="L").length, p=g.filter(x=>x.result==="P").length;
+    const u=g.reduce((a,x)=>a+(+x.units||0),0), risk=g.filter(x=>x.result!=="P").length;
+    return `<div class="card">${name[s]}<br><b>${w}-${l}${p?"-"+p:""}</b> · ${u>=0?"+":""}${u.toFixed(2)} u
+      <div class="small">${b.length} logged · ${g.length} graded · ROI ${risk?(u/risk*100).toFixed(1)+"%":"–"}</div></div>`; }).join("");
+  const rows = P.slice().sort((a,b)=>b.start_utc.localeCompare(a.start_utc)).slice(0,200).map(b=>`<tr>
+    <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy==="v1_total"?"v1 total":"v2 spread"}</td>
+    <td><b>${b.strategy==="v1_total"?b.side+" "+f1(b.line):b.side+" "+sg(b.line)}</b> <span class="small">${b.odds>0?"+":""}${b.odds}</span></td>
+    <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}</td>
+    <td>${b.result?`<span class="${b.result}">${b.result}</span> <span class="small">${b.away_pts}-${b.home_pts} · ${(+b.units>=0?"+":"")+(+b.units).toFixed(2)}u</span>`:'<span class="small">pending</span>'}</td></tr>`).join("");
+  document.getElementById("paper").innerHTML = `<div class="rec">${rec}</div><div class="card"><table><thead><tr><th>Date</th><th>Game</th>
+    <th>Strategy</th><th>Bet (logged line, price)</th><th class="num">Proj</th><th class="num">Edge</th><th>Logged (ET)</th><th>Result</th>
+    </tr></thead><tbody>${rows||'<tr><td colspan="8" class="small">No paper bets yet: they start with the next game-day run.</td></tr>'}</tbody></table></div>
+    <p class="small">Each bet is logged once, at the consensus line and price when it's first flagged, and graded at that price. Judge after 100+ graded bets per strategy.</p>`;
+}
+paper();
 document.querySelector(".switch").addEventListener("click", e=>{ const t=e.target.dataset.tab; if(!t) return;
   document.querySelectorAll(".switch button").forEach(b=>b.classList.toggle("on", b.dataset.tab===t));
-  document.getElementById("games").hidden = t!=="games"; document.getElementById("props").hidden = t!=="props"; });
+  ["games","props","paper"].forEach(x=>document.getElementById(x).hidden = t!==x); });
 document.getElementById("foot").innerHTML = "Lines: Action Network consensus (current) and opening line. Injuries: Rotowire play-chance, ESPN as backup. "
   + "Model over chance is a first guess (Poisson / normal) and has not been checked against results yet. "
   + '<a href="https://github.com/Prezbo8/NBA-projection-model">Code</a>';
@@ -147,6 +177,10 @@ document.getElementById("foot").innerHTML = "Lines: Action Network consensus (cu
 
 if __name__ == "__main__":
     data = json.load(open(SRC))
+    log = os.path.join(ROOT, "data", "paper", "paper_trades.csv")
+    if os.path.exists(log):
+        import pandas as pd
+        data["paper"] = json.loads(pd.read_csv(log, dtype={"an_game_id": str}).to_json(orient="records"))
     # </script> inside the JSON would end the script tag early
     blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     open(OUT, "w").write(PAGE.replace("__DATA__", blob))

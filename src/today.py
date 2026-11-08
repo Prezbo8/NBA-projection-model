@@ -101,6 +101,8 @@ def main():
 
     # ---- team model, fitted on everything before today
     g = tm.load()
+    f1 = tm.Fitter(g)                      # v1: no availability terms (the version paper-traded on totals)
+    bp1, bo1 = f1.fit(DAY, tm.HALF_LIFE, tm.LAM)
     f = tm.Fitter(g)
     av = tm.with_missing(g, f)
     bp, bo = f.fit(DAY, tm.HALF_LIFE, tm.LAM)
@@ -134,12 +136,22 @@ def main():
         ppp_h = bo[0] + bo[1 + ih] + bo[1 + n + ia] + ex @ np.array([1, hb2b, ab2b, hmiss, amiss])
         ppp_a = bo[0] + bo[1 + ia] + bo[1 + n + ih] + ex @ np.array([0, ab2b, hb2b, amiss, hmiss])
         ph, pa = pace * ppp_h, pace * ppp_a
+        # v1 (same fit without missing-player terms: extras are home, b2b own, b2b opp)
+        pace1 = bp1[0] + bp1[1 + ih] + bp1[1 + ia]
+        ex1 = bo1[1 + 2 * n:]
+        v1h = pace1 * (bo1[0] + bo1[1 + ih] + bo1[1 + n + ia] + ex1 @ np.array([1, hb2b, ab2b]))
+        v1a = pace1 * (bo1[0] + bo1[1 + ia] + bo1[1 + n + ih] + ex1 @ np.array([0, ab2b, hb2b]))
         ln = lines_for(raw, gm["home"], gm["away"])
         games.append({**gm, "proj_home": round(ph, 1), "proj_away": round(pa, 1), "proj_total": round(ph + pa, 1),
                       "proj_spread_home": round(pa - ph, 1), "proj_pace": round(pace, 1),
                       "home_b2b": hb2b, "away_b2b": ab2b, "home_missing": round(hmiss, 1),
                       "away_missing": round(amiss, 1), **{k: v for k, v in ln.items()},
                       "edge_total": None if ln["total"] is None else round(ph + pa - ln["total"], 1),
+                      "v1_home": round(v1h, 1), "v1_away": round(v1a, 1), "v1_total": round(v1h + v1a, 1),
+                      "v1_edge_total": None if ln["total"] is None else round(v1h + v1a - ln["total"], 1),
+                      "cons": {k: next((r.get(k) for r in raw if r["home"] == gm["home"] and r["away"] == gm["away"]
+                                        and r["book"] == "consensus"), None)
+                               for k in ("total", "over", "under", "spread_home", "spread_home_line", "spread_away_line")},
                       # > 0: model likes the home side vs the line (e.g. line +8, model +5 -> +3)
                       "edge_spread": None if ln["spread_home"] is None else round(ln["spread_home"] - (pa - ph), 1),
                       "home_players": hpl, "away_players": apl, "home_tid": int(ht), "away_tid": int(at)})

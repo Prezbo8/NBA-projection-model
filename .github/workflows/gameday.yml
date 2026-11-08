@@ -3,7 +3,8 @@ name: Game day
 # Snapshots injuries (ESPN), lineups (Rotowire) and refs (official.nba.com) four times a day, and checks
 # that the morning nba.com (Mac) and odds jobs saved yesterday. A source failing 2 runs in a row opens a
 # GitHub issue labeled source-alert; it closes itself when everything works again.
-# Then it rebuilds the dashboard (src/today.py -> src/dashboard.py -> docs/index.html, served by Pages).
+# Then it rebuilds the dashboard (src/today.py -> src/paper.py (log + grade paper bets) -> src/dashboard.py
+# -> docs/index.html, served by Pages).
 on:
   schedule:
     - cron: "15 16,20,23 * * *"   # 11:15 AM, 3:15 PM, 6:15 PM EST
@@ -24,13 +25,13 @@ jobs:
       - name: Snapshot + health
         run: python src/gameday.py | tee gameday.txt
       - name: Dashboard (today's projections)
-        run: set -o pipefail; { python src/today.py && python src/dashboard.py; } | tee -a gameday.txt
+        run: set -o pipefail; { python src/today.py && python src/paper.py && python src/dashboard.py; } | tee -a gameday.txt
       - name: Commit
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/gameday docs/index.html docs/.nojekyll
+          git add data/gameday data/paper docs/index.html docs/.nojekyll
           git diff --cached --quiet || git commit -qm "Game day snapshot + dashboard $(date +'%Y-%m-%d %H:%M')"
           for i in 1 2 3 4 5; do git pull --rebase -q && git push && break; sleep $((i * 5)); done
       - name: Source alert issue
