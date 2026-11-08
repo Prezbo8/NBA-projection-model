@@ -1,0 +1,22 @@
+name: Probe sources
+
+# Phase 0: checks which NBA data sources answer from a GitHub runner. Report only; nothing is committed.
+on:
+  workflow_dispatch: {}
+  push:
+    paths: ["research/probe_sources.py", ".github/workflows/probe.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: pip install requests
+      - name: Probe every source
+        run: python research/probe_sources.py | tee probe.txt
+      - name: Summary
+        if: always()
+        run: { echo '```'; cat probe.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
