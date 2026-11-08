@@ -227,9 +227,9 @@ if __name__ == "__main__":
         # each idea alone and together, on v1 (no availability) and v2; scored on the tune seasons only
         rest = ["rested", "opp_rested", "three4", "opp_three4"]
         trav = ["travel", "opp_travel"]
-        configs = [("base", [], None), ("+rest", rest, None), ("+travel", trav, None),
-                   ("+pace_hl 180", [], 180), ("+pace_hl 365", [], 365), ("+rest+travel", rest + trav, None),
-                   ("+rest+travel+pace_hl 180", rest + trav, 180)]
+        # Nov 8 2026 round 1 (rejected, all worse on 2015-21): +rest, +travel, pace_hl 180 / 365, combos
+        configs = [("base", [], None), ("+pace_hl 30", [], 30), ("+pace_hl 45", [], 45), ("+pace_hl 60", [], 60)]
+        del rest, trav
         print("version | config | MAE total | MAE margin | last fit extras (home, b2b, b2b opp, [miss], features...)")
         for ver in ("v1", "v2"):
             if ver == "v2":
