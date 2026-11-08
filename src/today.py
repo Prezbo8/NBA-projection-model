@@ -12,6 +12,8 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import math
+
 import numpy as np
 import pandas as pd
 
@@ -29,6 +31,29 @@ TODAY = NOW.date()
 DAY = (pd.Timestamp(TODAY) - pm.DAY0).days
 MARKET_STAT = {"pts": "PTS", "reb": "REB", "ast": "AST", "fg3m": "FG3M", "stl": "STL", "blk": "BLK",
                "pra": "PRA", "pr": "PR", "pa": "PA", "ra": "RA", "stocks": "STOCKS"}
+
+
+POISSON = {"reb", "ast", "fg3m", "stl", "blk", "stocks", "ra"}   # counting stats: Poisson; the rest: normal
+
+
+def p_over(market, proj, line):
+    """Model's chance of going over `line` (v1 guess: Poisson for counts, normal sd = 1.1*sqrt(proj) for
+    points-heavy markets; to be checked against the props backtest before it drives any call)."""
+    if proj <= 0:
+        return 0.0
+    if market in POISSON:
+        k = math.floor(line)                     # over x.5 = at least k+1
+        cdf = sum(math.exp(-proj) * proj ** i / math.factorial(i) for i in range(k + 1))
+        return 1 - cdf
+    sd = 1.1 * math.sqrt(proj)
+    return 0.5 * math.erfc((line - proj) / (sd * math.sqrt(2)))
+
+
+def no_vig(over, under):
+    """Market's over chance with the vig removed (American odds)."""
+    imp = lambda o: 100 / (o + 100) if o > 0 else -o / (-o + 100)  # noqa: E731
+    a, b = imp(over), imp(under)
+    return a / (a + b)
 
 
 def out_probs():
@@ -173,6 +198,8 @@ def main():
                           "proj": proj, "line": c.line, "over": c.over, "under": c.under,
                           "open_line": None if op.empty else op.iloc[0].line,
                           "edge_pct": round((proj - c.line) / max(c.line, 0.5), 3),
+                          "p_over": round(p_over(market, proj, c.line), 3),
+                          "mkt_over": None if pd.isna(c.over) or pd.isna(c.under) else round(no_vig(c.over, c.under), 3),
                           "best_over": None if bo_ is None else {"book": bo_.book, "odds": bo_.over},
                           "best_under": None if bu_ is None else {"book": bu_.book, "odds": bu_.under}})
     for gm in games:

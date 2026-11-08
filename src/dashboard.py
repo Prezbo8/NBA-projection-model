@@ -1,0 +1,153 @@
+"""Build docs/index.html (GitHub Pages dashboard) from docs/today.json.
+
+Projections only: no bet calls until the backtests show an edge (team v1/v2 lost to closing lines;
+props verdict pending). Styling follows the NHL dashboard (same palette, light + dark).
+
+  python src/dashboard.py
+"""
+import json
+import os
+
+ROOT = os.path.join(os.path.dirname(__file__), "..")
+SRC = os.path.join(ROOT, "docs", "today.json")
+OUT = os.path.join(ROOT, "docs", "index.html")
+
+PAGE = """<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NBA Projection Model</title>
+<style>
+:root{--bg:#f3f5f8;--card:#fff;--ink:#0f1a2a;--muted:#5f6b7a;--line:#dfe4ea;--ice:#e8eef5;--accent:#1f6feb;
+  --gold:#c99700;--gold-soft:#fff4cc;--pos:#1a7f37;--neg:#c62828}
+@media (prefers-color-scheme:dark){:root{--bg:#0b1119;--card:#131c27;--ink:#e8edf3;--muted:#93a1b2;--line:#233040;
+  --ice:#18222f;--accent:#58a6ff;--gold:#e3b341;--gold-soft:#2b2410;--pos:#3fb950;--neg:#f85149;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1180px;margin:0 auto;padding:0 14px 40px}
+.hero{background:linear-gradient(135deg,#17408b,#c9082a);color:#fff;padding:20px 0 16px;margin-bottom:16px}
+.hero h1{margin:0;font-size:24px}.hero .sub{opacity:.85;font-size:13px;margin-top:2px}
+.hero .stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.hero .stat{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:6px 12px;font-size:12.5px}
+.hero .stat b{display:block;font-size:16px}
+.banner{background:var(--gold-soft);border:1px solid var(--line);border-left:5px solid var(--gold);border-radius:10px;
+  padding:10px 14px;margin:0 0 14px;font-size:13.5px}
+.switch{display:inline-flex;gap:4px;padding:4px;margin:0 0 14px;background:var(--ice);border:1px solid var(--line);border-radius:999px}
+.switch button{font:inherit;font-size:14px;font-weight:800;padding:7px 22px;border:0;border-radius:999px;background:transparent;color:var(--muted);cursor:pointer}
+.switch button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin:0 0 10px;align-items:center}
+.chips button{font:inherit;font-size:12.5px;font-weight:700;padding:5px 12px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);cursor:pointer}
+.chips button.on{background:var(--card);color:var(--ink);border-color:var(--muted)}
+.chips input{font:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);border-radius:999px;background:var(--card);color:var(--ink);margin-left:auto;min-width:180px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:6px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:13.5px}
+th{font-size:10.5px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.05em;text-align:left;padding:8px 8px;background:var(--ice);white-space:nowrap;cursor:default}
+th.sort{cursor:pointer}th.sort:hover{color:var(--ink)}
+td{padding:8px 8px;border-top:1px solid var(--line);vertical-align:top;white-space:nowrap}
+td.num,th.num{text-align:right}
+.mu b{font-size:14.5px}.time{font-weight:800;font-size:12px;color:var(--muted)}
+.b2b{display:inline-block;font-size:10px;font-weight:800;padding:1px 6px;border-radius:999px;background:#dc2626;color:#fff;margin-left:6px;vertical-align:middle}
+.small{font-size:11.5px;color:var(--muted)}
+.edge{display:inline-block;min-width:46px;text-align:center;font-weight:800;border-radius:6px;padding:1px 6px}
+.e0{background:transparent}.e1{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.e2{background:color-mix(in srgb,var(--accent) 32%,transparent)}.e3{background:color-mix(in srgb,var(--accent) 52%,transparent)}
+.lean{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.out{display:block;font-size:12px;white-space:normal;max-width:300px}.out .x{color:var(--neg);font-weight:700}
+footer{margin-top:16px;font-size:12px;color:var(--muted)}
+@media (max-width:760px){.hide-m{display:none}td,th{padding:6px 5px}table{font-size:12.5px}.chips input{min-width:120px;margin-left:0}}
+</style></head><body>
+<div class="hero"><div class="wrap">
+  <h1>NBA Projection Model</h1>
+  <div class="sub" id="sub"></div>
+  <div class="stats" id="stats"></div>
+</div></div>
+<div class="wrap">
+  <div class="banner"><b>Projections only. No bet calls yet.</b> In backtests the team model has not beaten closing lines
+    (2007-2026), and the props verdict is pending. Edges here are the model's opinion, not picks.</div>
+  <div class="switch"><button class="on" data-tab="games">Games</button><button data-tab="props">Props</button></div>
+  <div id="games"></div>
+  <div id="props" hidden>
+    <div class="chips" id="mkts"></div>
+    <div class="card"><table id="pt"></table></div>
+  </div>
+  <footer id="foot"></footer>
+</div>
+<script>
+const D = __DATA__;
+const ET = s => new Date(s).toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"});
+const f1 = x => x==null ? "–" : (Math.round(x*10)/10).toFixed(1);
+const sg = x => x==null ? "–" : (x>0?"+":"")+f1(x);
+const pct = x => x==null ? "–" : Math.round(x*100)+"%";
+const ecls = (x,a,b,c) => { const v=Math.abs(x||0); return v>=c?"e3":v>=b?"e2":v>=a?"e1":"e0"; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const MK = {pts:"PTS",reb:"REB",ast:"AST",fg3m:"3PM",pra:"PRA",pr:"P+R",pa:"P+A",ra:"R+A",stl:"STL",blk:"BLK",stocks:"STL+BLK"};
+
+document.getElementById("sub").textContent = `${D.date} · updated ${D.generated_et} ET · team ${D.model?.team||""} · props ${D.model?.props||""}`;
+document.getElementById("stats").innerHTML = [["Games",D.games.length],["Props with lines",D.props.length]]
+  .map(([k,v])=>`<div class="stat">${k}<b>${v}</b></div>`).join("");
+
+function outs(pl){
+  const o = pl.filter(p=>p.p_out>=0.5).sort((a,b)=>b.min*b.value-a.min*a.value);
+  const q = pl.filter(p=>p.p_out>0 && p.p_out<0.5);
+  return (o.length?`<span class="x">Out:</span> ${o.map(p=>esc(p.player)).join(", ")}`:"")
+    + (q.length?`${o.length?"<br>":""}<span class="small">Questionable: ${q.map(p=>esc(p.player)+" ("+pct(1-p.p_out)+")").join(", ")}</span>`:"")
+    || '<span class="small">nobody listed</span>';
+}
+function games(){
+  if(!D.games.length) return '<div class="card" style="padding:14px">No games today.</div>';
+  const rows = D.games.slice().sort((a,b)=>a.start_utc.localeCompare(b.start_utc)).map(g=>`<tr>
+    <td><span class="time">${ET(g.start_utc)}</span></td>
+    <td class="mu"><b>${g.away}</b>${g.away_b2b?'<span class="b2b">B2B</span>':""} @ <b>${g.home}</b>${g.home_b2b?'<span class="b2b">B2B</span>':""}
+      <div class="small">${f1(g.proj_away)} – ${f1(g.proj_home)} · pace ${f1(g.proj_pace)}</div></td>
+    <td class="num"><b>${f1(g.proj_total)}</b></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
+    <td class="num"><span class="edge ${ecls(g.edge_total,2,4,6)}">${sg(g.edge_total)}</span><div class="small">${g.edge_total>0?"over":g.edge_total<0?"under":""}</div></td>
+    <td class="num"><b>${g.home} ${sg(g.proj_spread_home)}</b></td><td class="num">${sg(g.spread_home)}<div class="small">open ${sg(g.open_spread_home)}</div></td>
+    <td class="num"><span class="edge ${ecls(g.edge_spread,1.5,3,4.5)}">${sg(g.edge_spread)}</span><div class="small">${g.edge_spread>0?g.home:g.edge_spread<0?g.away:""}</div></td>
+    <td class="hide-m"><span class="out"><b>${g.away}</b> ${outs(g.away_players)}</span><span class="out"><b>${g.home}</b> ${outs(g.home_players)}</span></td></tr>`).join("");
+  return `<div class="card"><table><thead><tr><th>Time</th><th>Matchup · proj score</th><th class="num">Proj total</th>
+    <th class="num">Line</th><th class="num">Edge</th><th class="num">Proj spread</th><th class="num">Line</th><th class="num">Edge</th>
+    <th class="hide-m">Injuries (Rotowire / ESPN)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+document.getElementById("games").innerHTML = games();
+
+let mkt = "all", q = "", sortKey = "gap";
+const mkts = ["all", ...Object.keys(MK).filter(m=>D.props.some(p=>p.market===m))];
+const mb = document.getElementById("mkts");
+mb.innerHTML = mkts.map(m=>`<button data-m="${m}" class="${m==="all"?"on":""}">${m==="all"?"All":MK[m]}</button>`).join("")
+  + '<input id="q" placeholder="Search player or team">';
+mb.addEventListener("click", e=>{ const m=e.target.dataset.m; if(!m) return; mkt=m;
+  mb.querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.m===m)); props(); });
+document.getElementById("q").addEventListener("input", e=>{ q=e.target.value.toLowerCase(); props(); });
+function props(){
+  let P = D.props.filter(p=>(mkt==="all"||p.market===mkt) && (!q || (p.player+" "+p.team).toLowerCase().includes(q)));
+  P.forEach(p=>p.gap = p.mkt_over==null ? 0 : p.p_over - p.mkt_over);
+  P.sort(sortKey==="gap" ? (a,b)=>Math.abs(b.gap)-Math.abs(a.gap) : (a,b)=>a.player.localeCompare(b.player));
+  const rows = P.slice(0,300).map(p=>{ const over = p.gap>0, best = over?p.best_over:p.best_under; return `<tr>
+    <td><b>${esc(p.player)}</b><div class="small">${p.team} vs ${p.opp} · ${ET(p.start_utc)} · ${f1(p.exp_min)} min</div></td>
+    <td>${MK[p.market]}</td><td class="num"><b>${f1(p.proj)}</b></td>
+    <td class="num">${f1(p.line)}<div class="small">${p.over>0?"+":""}${p.over} / ${p.under>0?"+":""}${p.under}${p.open_line!=null&&p.open_line!==p.line?" · open "+f1(p.open_line):""}</div></td>
+    <td class="num">${pct(p.p_over)}</td><td class="num">${pct(p.mkt_over)}</td>
+    <td class="num"><span class="edge ${ecls(p.gap*100,4,8,12)}">${sg(p.gap*100)}</span></td>
+    <td><span class="lean">${p.gap>0?"OVER":p.gap<0?"UNDER":"–"}</span></td>
+    <td class="hide-m">${best?`${best.book} ${best.odds>0?"+":""}${best.odds}`:'<span class="small">–</span>'}</td></tr>`; }).join("");
+  document.getElementById("pt").innerHTML = `<thead><tr><th class="sort" data-s="name">Player</th><th>Market</th><th class="num">Proj</th>
+    <th class="num">Line (consensus)</th><th class="num">Model over</th><th class="num">Market over (no vig)</th>
+    <th class="num sort" data-s="gap">Gap (pts)</th><th>Lean</th><th class="hide-m">Best price at this line</th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="9" class="small">No props match.</td></tr>'}</tbody>`;
+  document.querySelectorAll("#pt th.sort").forEach(th=>th.onclick=()=>{ sortKey=th.dataset.s; props(); });
+}
+props();
+document.querySelector(".switch").addEventListener("click", e=>{ const t=e.target.dataset.tab; if(!t) return;
+  document.querySelectorAll(".switch button").forEach(b=>b.classList.toggle("on", b.dataset.tab===t));
+  document.getElementById("games").hidden = t!=="games"; document.getElementById("props").hidden = t!=="props"; });
+document.getElementById("foot").innerHTML = "Lines: Action Network consensus (current) and opening line. Injuries: Rotowire play-chance, ESPN as backup. "
+  + "Model over chance is a first guess (Poisson / normal) and has not been checked against results yet. "
+  + '<a href="https://github.com/Prezbo8/NBA-projection-model">Code</a>';
+</script></body></html>
+"""
+
+
+if __name__ == "__main__":
+    data = json.load(open(SRC))
+    # </script> inside the JSON would end the script tag early
+    blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
+    open(OUT, "w").write(PAGE.replace("__DATA__", blob))
+    print(f"wrote {OUT} ({len(data['games'])} games, {len(data['props'])} props)")
