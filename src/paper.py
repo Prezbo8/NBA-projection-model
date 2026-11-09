@@ -5,6 +5,9 @@ Strategies (thresholds from the backtests, Nov 8 2026):
   v2_spread  |v2 spread edge| >= 3                          (v2's injury signal: untestable on past data)
   v3_total   |v3 projected total - consensus total| >= 3    (v3 = v1 + availability for totals, from Nov 8 2026;
                                                               beats v1 on MAE, but its line test has look-ahead)
+  v3_spread  |v3 spread edge| >= 3                          (v3's margin error 10.83 vs v2 10.90; paper only)
+
+Every game on the slate is graded too (slate.csv: final score + closing total / spread), not just the bets.
 
 A bet is logged ONCE per game and strategy: the line and price at the first run that flags it (later runs
 never change it, so the record reflects a line you could actually have bet then). Only games that haven't
@@ -28,7 +31,8 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 LOG = os.path.join(ROOT, "data", "paper", "paper_trades.csv")
 SLATE = os.path.join(ROOT, "data", "paper", "slate.csv")
 SLATES = [os.path.join(ROOT, "docs", f) for f in ("today.json", "tomorrow.json")]  # tomorrow: evening runs, near the open
-K = {"v1_total": 3.0, "v2_spread": 3.0, "v3_total": 3.0}
+K = {"v1_total": 3.0, "v2_spread": 3.0, "v3_total": 3.0, "v3_spread": 3.0}
+SLATE_RESULT = ["away_pts", "home_pts", "close_total", "close_spread_home"]
 COLS = ["date", "an_game_id", "start_utc", "away", "home", "strategy", "side", "line", "odds", "proj", "edge",
         "logged_et", "open_line", "close_line", "clv", "away_pts", "home_pts", "result", "units"]
 # open_line: the opening line, in the bet's terms (how far it had moved when logged)
@@ -60,7 +64,8 @@ def log(path):
             new_slate.append({**base, "total": c["total"], "over": c["over"], "under": c["under"],
                               "spread_home": c["spread_home"], "v1_total": g["v1_total"], "v2_total": g["proj_total"],
                               "v2_spread_home": g["proj_spread_home"], "home_missing": g["home_missing"],
-                              "away_missing": g["away_missing"], "v3_total": g.get("v3_total")})
+                              "away_missing": g["away_missing"], "v3_total": g.get("v3_total"),
+                              "v3_spread_home": g.get("v3_spread_home"), "v1_spread_home": g.get("v1_spread_home")})
         # v1 and v3 totals
         for s in ("v1_total", "v3_total"):
             e = g.get(s.replace("_total", "_edge_total"))
@@ -69,16 +74,17 @@ def log(path):
                 new.append({**base, "strategy": s, "side": "over" if over else "under", "line": c["total"],
                             "odds": c["over"] if over else c["under"], "proj": g[s], "edge": e,
                             "open_line": g.get("open_total")})
-        # v2 spreads (edge > 0 = model likes home vs the line)
-        e = g.get("edge_spread")
-        if e is not None and abs(e) >= K["v2_spread"] and (gid, "v2_spread") not in have and c.get("spread_home") is not None:
-            home = e > 0
-            new.append({**base, "strategy": "v2_spread", "side": g["home"] if home else g["away"],
-                        "line": c["spread_home"] if home else -c["spread_home"],
-                        "odds": c["spread_home_line"] if home else c["spread_away_line"],
-                        "proj": g["proj_spread_home"] if home else -g["proj_spread_home"], "edge": e,
-                        "open_line": None if g.get("open_spread_home") is None else
-                        (g["open_spread_home"] if home else -g["open_spread_home"])})
+        # v2 / v3 spreads (edge > 0 = model likes home vs the line)
+        for s, ek, pk in (("v2_spread", "edge_spread", "proj_spread_home"), ("v3_spread", "v3_edge_spread", "v3_spread_home")):
+            e = g.get(ek)
+            if e is not None and abs(e) >= K[s] and (gid, s) not in have and c.get("spread_home") is not None:
+                home = e > 0
+                new.append({**base, "strategy": s, "side": g["home"] if home else g["away"],
+                            "line": c["spread_home"] if home else -c["spread_home"],
+                            "odds": c["spread_home_line"] if home else c["spread_away_line"],
+                            "proj": g[pk] if home else -g[pk], "edge": e,
+                            "open_line": None if g.get("open_spread_home") is None else
+                            (g["open_spread_home"] if home else -g["open_spread_home"])})
     os.makedirs(os.path.dirname(LOG), exist_ok=True)
     if new:
         trades = pd.concat([trades, pd.DataFrame(new)], ignore_index=True)
@@ -91,8 +97,6 @@ def log(path):
 def grade():
     trades = load(LOG, COLS).reindex(columns=COLS)
     open_ = trades.result.isna()
-    if not open_.any():
-        return
     finals = read_all(os.path.join(ROOT, "data", "odds", "*", "*_games.csv.gz"))
     if not len(finals):
         return
@@ -118,12 +122,22 @@ def grade():
         ct, cs = close[str(r.an_game_id)]
         if r.strategy.endswith("_total") and pd.notna(ct):
             trades.loc[i, ["close_line", "clv"]] = [ct, (ct - r.line) if r.side == "over" else (r.line - ct)]
-        elif r.strategy == "v2_spread" and pd.notna(cs):
+        elif r.strategy.endswith("_spread") and pd.notna(cs):
             c_side = cs if r.side == r.home else -cs
             trades.loc[i, ["close_line", "clv"]] = [c_side, r.line - c_side]
         done += 1
     trades[COLS].to_csv(LOG, index=False)
     print(f"paper: {done} bets graded")
+    # every game on the slate: final score + closing lines (the model's projections are already in each row)
+    slate = load(SLATE)
+    if len(slate):
+        slate = slate.reindex(columns=list(dict.fromkeys(list(slate.columns) + SLATE_RESULT)))
+        todo = slate.home_pts.isna() & slate.an_game_id.astype(str).isin(score)
+        for i in slate.index[todo]:
+            gid = str(slate.at[i, "an_game_id"])
+            slate.loc[i, SLATE_RESULT] = [*score[gid], *close[gid]]
+        slate.to_csv(SLATE, index=False)
+        print(f"paper: {int(todo.sum())} slate games graded")
 
 
 if __name__ == "__main__":

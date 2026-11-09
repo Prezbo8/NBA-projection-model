@@ -51,6 +51,7 @@ td.num,th.num{text-align:right}
 .e2{background:color-mix(in srgb,var(--accent) 32%,transparent)}.e3{background:color-mix(in srgb,var(--accent) 52%,transparent)}
 .lean{font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .out{display:block;font-size:12px;white-space:normal;max-width:300px}.out .x{color:var(--neg);font-weight:700}
+td.sep,th.sep{border-left:2px solid var(--line)}
 .paperpill{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:var(--gold);color:#111;margin-top:3px}
 .rec{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}.rec .card{padding:10px 14px;min-width:220px}.rec b{font-size:18px}
 .W{color:var(--pos);font-weight:800}.L{color:var(--neg);font-weight:800}.P{color:var(--muted);font-weight:800}
@@ -66,8 +67,9 @@ footer{margin-top:16px;font-size:12px;color:var(--muted)}
 <div class="wrap">
   <div class="banner"><b>Paper trading only. No real bets.</b> The focus is <b>game totals</b>: v1 beat the <i>opening</i>
     total 55.2% in 2023-26 (1,785 bets with edge &ge; 3, +97.4 u at -110; the line then moved toward the model 63% of the time) but lost to the closing line, so plays are logged
-    at the line when first flagged and judged by closing-line value. Spreads (v2) are untested; props have no edge.</div>
-  <div class="switch"><button class="on" data-tab="games">Totals</button><button data-tab="tomorrow" id="tmb" hidden>Tomorrow (near the open)</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
+    at the line when first flagged and judged by closing-line value. Spreads: v1 spreads tested with no edge (51.0% vs the open, 2021-26), so spread plays come from the injury-aware v3 (and v2), paper only and
+    untestable on past data. Props have no edge.</div>
+  <div class="switch"><button class="on" data-tab="games">Totals &amp; Spreads</button><button data-tab="tomorrow" id="tmb" hidden>Tomorrow (near the open)</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
   <div id="games"></div>
   <div id="tomorrow" hidden></div>
   <div id="props" hidden>
@@ -94,6 +96,7 @@ const PLAY = 3;   // v1 total edge that gets paper-traded (paper.py K["v1_total"
 const plays = D.games.filter(g=>g.v1_edge_total!=null && Math.abs(g.v1_edge_total)>=PLAY);
 const v1g = (D.paper||[]).filter(b=>b.strategy==="v1_total" && b.result);
 document.getElementById("stats").innerHTML = [["Games",D.games.length],["Totals plays (edge ≥ 3)",plays.length],
+  ["Spread plays (v3, edge ≥ 3)",D.games.filter(g=>g.v3_edge_spread!=null && Math.abs(g.v3_edge_spread)>=PLAY).length],
   ["v1 totals paper",`${v1g.filter(b=>b.result==="W").length}-${v1g.filter(b=>b.result==="L").length}`]]
   .map(([k,v])=>`<div class="stat">${k}<b>${v}</b></div>`).join("");
 
@@ -104,9 +107,15 @@ function outs(pl){
     + (q.length?`${o.length?"<br>":""}<span class="small">Questionable: ${q.map(p=>esc(p.player)+" ("+pct(1-p.p_out)+")").join(", ")}</span>`:"")
     || '<span class="small">nobody listed</span>';
 }
-function pills(g){
-  return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id))
-    .map(b=>`<div class="paperpill">LOGGED ${b.strategy.endsWith("_total")?b.strategy.slice(0,2)+" "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
+function pills(g,kind){
+  return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id) && b.strategy.endsWith(kind))
+    .map(b=>`<div class="paperpill">LOGGED ${b.strategy.slice(0,2)+" "+b.side+" "+(b.strategy.endsWith("_total")?f1(b.line):sg(b.line))}</div>`).join("");
+}
+// spread play: edge > 0 = take the home side at the current line
+function sprPlay(g,e,tag){
+  if(e==null || Math.abs(e)<PLAY || g.spread_home==null) return tag?"":'<span class="small">pass</span>';
+  const side = e>0 ? `${g.home} ${sg(g.spread_home)}` : `${g.away} ${sg(-g.spread_home)}`;
+  return tag ? `<div class="small">${tag}: ${side}</div>` : `<b>${side}</b>`;
 }
 function games(list){
   if(!list.length) return '<div class="card" style="padding:14px">No games today.</div>';
@@ -116,11 +125,15 @@ function games(list){
       <div class="small">${f1(g.v1_away)} – ${f1(g.v1_home)} · pace ${f1(g.proj_pace)}</div></td>
     <td class="num"><b>${f1(g.v1_total)}</b><div class="small">v3 ${f1(g.v3_total)}</div></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
     <td class="num"><span class="edge ${ecls(g.v1_edge_total,1.5,PLAY,6)}">${sg(g.v1_edge_total)}</span><div class="small">v3 ${sg(g.v3_edge_total)}</div></td>
-    <td>${g.v1_edge_total!=null&&Math.abs(g.v1_edge_total)>=PLAY?`<b>${g.v1_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</b>`:'<span class="small">pass</span>'}${g.v3_edge_total!=null&&Math.abs(g.v3_edge_total)>=PLAY?`<div class="small">v3: ${g.v3_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</div>`:""}${pills(g)}</td>
-    <td class="num hide-m">${g.home} ${sg(g.proj_spread_home)}<div class="small">line ${sg(g.spread_home)} · edge ${sg(g.edge_spread)}</div></td>
+    <td>${g.v1_edge_total!=null&&Math.abs(g.v1_edge_total)>=PLAY?`<b>${g.v1_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</b>`:'<span class="small">pass</span>'}${g.v3_edge_total!=null&&Math.abs(g.v3_edge_total)>=PLAY?`<div class="small">v3: ${g.v3_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</div>`:""}${pills(g,"_total")}</td>
+    <td class="num sep">${g.home} <b>${sg(g.v3_spread_home)}</b><div class="small">v2 ${sg(g.proj_spread_home)} · v1 ${sg(g.v1_spread_home)}</div></td>
+    <td class="num">${g.home} ${sg(g.spread_home)}<div class="small">open ${sg(g.open_spread_home)}</div></td>
+    <td class="num"><span class="edge ${ecls(g.v3_edge_spread,1.5,PLAY,6)}">${sg(g.v3_edge_spread)}</span><div class="small">v2 ${sg(g.edge_spread)}</div></td>
+    <td>${sprPlay(g,g.v3_edge_spread,"")}${sprPlay(g,g.edge_spread,"v2")}${pills(g,"_spread")}</td>
     <td class="hide-m"><span class="out"><b>${g.away}</b> ${outs(g.away_players)}</span><span class="out"><b>${g.home}</b> ${outs(g.home_players)}</span></td></tr>`).join("");
-  return `<div class="card"><table><thead><tr><th>Time</th><th>Matchup · v1 proj score</th><th class="num">Proj total (v1)</th>
-    <th class="num">Total line</th><th class="num">Edge (v1)</th><th>Play</th><th class="num hide-m">Spread (v2, secondary)</th>
+  return `<div class="card" style="overflow-x:auto"><table><thead><tr><th>Time</th><th>Matchup · v1 proj score</th><th class="num">Proj total (v1)</th>
+    <th class="num">Total line</th><th class="num">Edge (v1)</th><th>Total play</th><th class="num sep">Proj spread (v3)</th>
+    <th class="num">Spread line</th><th class="num">Edge (v3)</th><th>Spread play</th>
     <th class="hide-m">Injuries (Rotowire / ESPN)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 document.getElementById("games").innerHTML = games(D.games);
@@ -160,7 +173,7 @@ function props(){
 }
 props();
 function paper(){
-  const P = D.paper||[], name = {v1_total:"v1 totals (edge ≥ 3)", v3_total:"v3 totals, v1 + injuries (edge ≥ 3, from Nov 8)", v2_spread:"v2 spreads, injury signal (edge ≥ 3)"};
+  const P = D.paper||[], name = {v1_total:"v1 totals (edge ≥ 3)", v3_total:"v3 totals, v1 + injuries (edge ≥ 3, from Nov 8)", v3_spread:"v3 spreads (edge ≥ 3, from Nov 9)", v2_spread:"v2 spreads, injury signal (edge ≥ 3)"};
   const rec = Object.keys(name).map(s=>{ const b=P.filter(x=>x.strategy===s), g=b.filter(x=>x.result);
     const w=g.filter(x=>x.result==="W").length, l=g.filter(x=>x.result==="L").length, p=g.filter(x=>x.result==="P").length;
     const u=g.reduce((a,x)=>a+(+x.units||0),0), risk=g.filter(x=>x.result!=="P").length;
@@ -170,14 +183,40 @@ function paper(){
       <div class="small">${b.length} logged · ${g.length} graded · ROI ${risk?(u/risk*100).toFixed(1)+"%":"–"}</div>
       <div class="small">vs closing line: ${clv==null?"–":(clv>=0?"+":"")+clv.toFixed(2)+" pts avg, beat the close "+beat+"/"+cl.length}</div></div>`; }).join("");
   const rows = P.slice().sort((a,b)=>b.start_utc.localeCompare(a.start_utc)).slice(0,200).map(b=>`<tr>
-    <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy.endsWith("_total")?b.strategy.slice(0,2)+" total":"v2 spread"}</td>
+    <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy.slice(0,2)+(b.strategy.endsWith("_total")?" total":" spread")}</td>
     <td><b>${b.strategy.endsWith("_total")?b.side+" "+f1(b.line):b.side+" "+sg(b.line)}</b> <span class="small">${b.odds>0?"+":""}${b.odds}</span></td>
     <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}<br>open ${b.open_line!=null&&b.open_line!==""?(b.strategy.endsWith("_total")?f1(b.open_line):sg(b.open_line)):"–"}${b.close_line!=null&&b.close_line!==""?" · close "+(b.strategy.endsWith("_total")?f1(b.close_line):sg(b.close_line)):""}</td>
     <td>${b.result?`<span class="${b.result}">${b.result}</span> <span class="small">${b.away_pts}-${b.home_pts} · ${(+b.units>=0?"+":"")+(+b.units).toFixed(2)}u</span>`:'<span class="small">pending</span>'}</td></tr>`).join("");
   document.getElementById("paper").innerHTML = `<div class="rec">${rec}</div><div class="card"><table><thead><tr><th>Date</th><th>Game</th>
     <th>Strategy</th><th>Bet (logged line, price)</th><th class="num">Proj</th><th class="num">Edge</th><th>Logged (ET) · open / close</th><th>Result</th>
     </tr></thead><tbody>${rows||'<tr><td colspan="8" class="small">No paper bets yet: they start with the next game-day run.</td></tr>'}</tbody></table></div>
-    <p class="small">Each bet is logged once, at the consensus line and price when it's first flagged, and graded at that price. "vs closing line" (CLV) is how much better the logged line was than the final line: a real edge should beat the close on average, and that shows up long before the win-loss record means anything. Judge the record after 100+ graded bets per strategy.</p>`;
+    <p class="small">Each bet is logged once, at the consensus line and price when it's first flagged, and graded at that price. "vs closing line" (CLV) is how much better the logged line was than the final line: a real edge should beat the close on average, and that shows up long before the win-loss record means anything. Judge the record after 100+ graded bets per strategy.</p>${everyGame()}`;
+}
+// every game on the slate (not just bets): projections vs the final score, leans vs the first-seen line
+function everyGame(){
+  const S = (D.slate||[]).filter(r=>r.home_pts!=null && r.home_pts!=="");
+  if(!S.length) return "";
+  const lean = (proj,line,act) => proj==null||line==null ? null : act===line ? "P" : ((act-line)*(proj-line)>0 ? "W" : "L");
+  const rate = a => { const x=a.filter(v=>v==="W"||v==="L"); return x.length ? `${x.filter(v=>v==="W").length}-${x.length-x.filter(v=>v==="W").length} (${Math.round(100*x.filter(v=>v==="W").length/x.length)}%)` : "–"; };
+  const mae = (k) => { const x=S.filter(r=>r[k]!=null&&r[k]!==""); return x.length ? (x.reduce((a,r)=>a+Math.abs(+r[k]-(+r.away_pts + +r.home_pts)),0)/x.length).toFixed(1) : "–"; };
+  const R = S.map(r=>{ const T=+r.away_pts + +r.home_pts, M=+r.home_pts - +r.away_pts, sl=r.spread_home==null||r.spread_home===""?null:+r.spread_home;
+    // spread lean: model likes home when line - model spread > 0; home covers when margin + line > 0
+    const sp = (k) => r[k]==null||r[k]===""||sl==null ? null : M+sl===0 ? "P" : ((M+sl)*(sl-(+r[k]))>0 ? "W" : "L");
+    return {r, T, M, v1:lean(+r.v1_total,+r.total,T), v3:lean(r.v3_total==null||r.v3_total===""?null:+r.v3_total,+r.total,T), s3:sp("v3_spread_home"), s1:sp("v1_spread_home")}; });
+  const tag = v => v ? `<span class="${v}">${v}</span>` : '<span class="small">–</span>';
+  const rows = R.slice().sort((a,b)=>b.r.start_utc.localeCompare(a.r.start_utc)).slice(0,80).map(({r,T,M,v1,v3,s3,s1})=>`<tr>
+    <td>${r.date}</td><td>${r.away} @ ${r.home}</td><td class="num"><b>${r.away_pts}-${r.home_pts}</b><div class="small">total ${T} · ${r.home} ${sg(M)}</div></td>
+    <td class="num">${f1(+r.total)}<div class="small">close ${f1(r.close_total===""?null:r.close_total)}</div></td>
+    <td class="num">${f1(+r.v1_total)} ${tag(v1)}<div class="small">v3 ${f1(r.v3_total===""?null:r.v3_total)} ${tag(v3)}</div></td>
+    <td class="num sep">${r.home} ${sg(r.spread_home===""?null:+r.spread_home)}<div class="small">close ${sg(r.close_spread_home===""?null:r.close_spread_home)}</div></td>
+    <td class="num">${r.home} ${sg(r.v3_spread_home===""||r.v3_spread_home==null?null:+r.v3_spread_home)} ${tag(s3)}<div class="small">v1 ${sg(r.v1_spread_home===""||r.v1_spread_home==null?null:+r.v1_spread_home)} ${tag(s1)}</div></td></tr>`).join("");
+  return `<h3 style="margin:18px 0 6px">Every game (not just bets)</h3>
+    <div class="rec"><div class="card">Totals lean vs first line<br><b>v1 ${rate(R.map(x=>x.v1))}</b><div class="small">v3 ${rate(R.map(x=>x.v3))}</div></div>
+    <div class="card">Spread lean vs first line<br><b>v3 ${rate(R.map(x=>x.s3))}</b><div class="small">v1 ${rate(R.map(x=>x.s1))}</div></div>
+    <div class="card">Avg miss on the total (pts)<br><b>v1 ${mae("v1_total")} · v3 ${mae("v3_total")}</b><div class="small">first line ${mae("total")} · close ${mae("close_total")}</div></div></div>
+    <div class="card" style="overflow-x:auto"><table><thead><tr><th>Date</th><th>Game</th><th class="num">Final</th><th class="num">Total line</th>
+    <th class="num">Proj total · lean</th><th class="num sep">Spread line</th><th class="num">Proj spread · lean</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small">Every game the model projected, graded at the first line it saw (W/L = the model's side, any edge size). The paper bets above only count edges of 3+.</p>`;
 }
 paper();
 document.querySelector(".switch").addEventListener("click", e=>{ const t=e.target.dataset.tab; if(!t) return;
@@ -201,6 +240,12 @@ if __name__ == "__main__":
     if os.path.exists(log):
         import pandas as pd
         data["paper"] = json.loads(pd.read_csv(log, dtype={"an_game_id": str}).to_json(orient="records"))
+    slate = os.path.join(ROOT, "data", "paper", "slate.csv")
+    if os.path.exists(slate):
+        import pandas as pd
+        sl = pd.read_csv(slate, dtype={"an_game_id": str})
+        sl = sl[sl.date >= sorted(sl.date.unique())[-7:][0]]          # the last 7 slate days
+        data["slate"] = json.loads(sl.to_json(orient="records"))
     # </script> inside the JSON would end the script tag early
     blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     open(OUT, "w").write(PAGE.replace("__DATA__", blob))
