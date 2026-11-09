@@ -180,6 +180,10 @@ def main():
                       "v3_home": round(v3h, 1), "v3_away": round(v3a, 1), "v3_total": round(v3h + v3a, 1),
                       "v3_pace": round(pace3, 1), "home_missing_pts": round(hpa, 1), "away_missing_pts": round(apa, 1),
                       "v3_edge_total": None if ln["total"] is None else round(v3h + v3a - ln["total"], 1),
+                      # spreads: home spread in betting terms (-5 = home favored by 5); edge > 0 = model likes home
+                      "v3_spread_home": round(v3a - v3h, 1), "v1_spread_home": round(v1a - v1h, 1),
+                      "v3_edge_spread": None if ln["spread_home"] is None else round(ln["spread_home"] - (v3a - v3h), 1),
+                      "v1_edge_spread": None if ln["spread_home"] is None else round(ln["spread_home"] - (v1a - v1h), 1),
                       "cons": {k: next((r.get(k) for r in raw if r["home"] == gm["home"] and r["away"] == gm["away"]
                                         and r["book"] == "consensus"), None)
                                for k in ("total", "over", "under", "spread_home", "spread_home_line", "spread_away_line")},
