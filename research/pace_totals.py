@@ -63,7 +63,7 @@ o = o.pivot_table(index=["date", "away", "home"], columns="book", values="total"
 o = o.rename(columns={"consensus": "close", "open": "open"})
 m = p.merge(o, on=["date", "away", "home"], how="left")
 sbr = pd.read_csv(os.path.join(ROOT, "data", "lines", "sbr_nba.csv"), dtype={"game_id": str})
-sbr = sbr.set_index("game_id")
+sbr = sbr.dropna(subset=["game_id"]).drop_duplicates("game_id").set_index("game_id")
 m["close"] = m.close.fillna(m.game_id.map(sbr.close_total))
 m["open"] = m.open.fillna(m.game_id.map(sbr.open_total))
 m = m.dropna(subset=["close"])
