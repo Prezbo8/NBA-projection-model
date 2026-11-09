@@ -3,6 +3,8 @@
 Strategies (thresholds from the backtests, Nov 8 2026):
   v1_total   |v1 projected total - consensus total| >= 3    (v1 beat OPENING lines ~53-54%; lost to closing)
   v2_spread  |v2 spread edge| >= 3                          (v2's injury signal: untestable on past data)
+  v3_total   |v3 projected total - consensus total| >= 3    (v3 = v1 + availability for totals, from Nov 8 2026;
+                                                              beats v1 on MAE, but its line test has look-ahead)
 
 A bet is logged ONCE per game and strategy: the line and price at the first run that flags it (later runs
 never change it, so the record reflects a line you could actually have bet then). Only games that haven't
@@ -26,7 +28,7 @@ ROOT = os.path.join(os.path.dirname(__file__), "..")
 LOG = os.path.join(ROOT, "data", "paper", "paper_trades.csv")
 SLATE = os.path.join(ROOT, "data", "paper", "slate.csv")
 TODAY = os.path.join(ROOT, "docs", "today.json")
-K = {"v1_total": 3.0, "v2_spread": 3.0}
+K = {"v1_total": 3.0, "v2_spread": 3.0, "v3_total": 3.0}
 COLS = ["date", "an_game_id", "start_utc", "away", "home", "strategy", "side", "line", "odds", "proj", "edge",
         "logged_et", "open_line", "close_line", "clv", "away_pts", "home_pts", "result", "units"]
 # open_line: the opening line, in the bet's terms (how far it had moved when logged)
@@ -58,14 +60,15 @@ def log():
             new_slate.append({**base, "total": c["total"], "over": c["over"], "under": c["under"],
                               "spread_home": c["spread_home"], "v1_total": g["v1_total"], "v2_total": g["proj_total"],
                               "v2_spread_home": g["proj_spread_home"], "home_missing": g["home_missing"],
-                              "away_missing": g["away_missing"]})
-        # v1 totals
-        e = g.get("v1_edge_total")
-        if e is not None and abs(e) >= K["v1_total"] and (gid, "v1_total") not in have:
-            over = e > 0
-            new.append({**base, "strategy": "v1_total", "side": "over" if over else "under", "line": c["total"],
-                        "odds": c["over"] if over else c["under"], "proj": g["v1_total"], "edge": e,
-                        "open_line": g.get("open_total")})
+                              "away_missing": g["away_missing"], "v3_total": g.get("v3_total")})
+        # v1 and v3 totals
+        for s in ("v1_total", "v3_total"):
+            e = g.get(s.replace("_total", "_edge_total"))
+            if e is not None and abs(e) >= K[s] and (gid, s) not in have:
+                over = e > 0
+                new.append({**base, "strategy": s, "side": "over" if over else "under", "line": c["total"],
+                            "odds": c["over"] if over else c["under"], "proj": g[s], "edge": e,
+                            "open_line": g.get("open_total")})
         # v2 spreads (edge > 0 = model likes home vs the line)
         e = g.get("edge_spread")
         if e is not None and abs(e) >= K["v2_spread"] and (gid, "v2_spread") not in have and c.get("spread_home") is not None:
@@ -102,7 +105,7 @@ def grade():
         if str(r.an_game_id) not in score:
             continue
         a, h = score[str(r.an_game_id)]
-        if r.strategy == "v1_total":
+        if r.strategy.endswith("_total"):
             diff = (a + h) - r.line
             res = 0 if diff == 0 else (1 if (diff > 0) == (r.side == "over") else -1)
         else:
@@ -113,7 +116,7 @@ def grade():
         units = 0.0 if res == 0 else ((o / 100 if o > 0 else 100 / -o) if res > 0 else -1.0)
         trades.loc[i, ["away_pts", "home_pts", "result", "units"]] = [a, h, {1: "W", -1: "L", 0: "P"}[res], round(units, 3)]
         ct, cs = close[str(r.an_game_id)]
-        if r.strategy == "v1_total" and pd.notna(ct):
+        if r.strategy.endswith("_total") and pd.notna(ct):
             trades.loc[i, ["close_line", "clv"]] = [ct, (ct - r.line) if r.side == "over" else (r.line - ct)]
         elif r.strategy == "v2_spread" and pd.notna(cs):
             c_side = cs if r.side == r.home else -cs

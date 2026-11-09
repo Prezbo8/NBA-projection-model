@@ -106,6 +106,9 @@ def main():
     f = tm.Fitter(g)
     av = tm.with_missing(g, f)
     bp, bo = f.fit(DAY, tm.HALF_LIFE, tm.LAM)
+    f3 = tm.Fitter(g)                      # v3: points-based availability in ppp and pace (totals)
+    avp = tm.with_v3(g, f3)
+    bp3, bo3 = f3.fit(DAY, tm.HALF_LIFE, tm.LAM)
     latest = g.sort_values("date").drop_duplicates("TEAM_ABBREVIATION", keep="last")
     tid_of = dict(zip(latest.TEAM_ABBREVIATION, latest.TEAM_ID))
     last_day = g.groupby("TEAM_ID").date.max().map(lambda d: (d - pm.DAY0).days)
@@ -117,19 +120,22 @@ def main():
     def team_side(abbr):
         tid = tid_of[abbr]
         pool = av.pool(tid, DAY, availability.AWAY_DAYS)
-        players, miss = [], 0.0
+        players, miss, mpts, mmin = [], 0.0, 0.0, 0.0
         for pid, m in pool.items():
             p_out = probs.get((abbr, norm(names.get(pid, ""))), 0.0)
             v = av.value(pid, DAY) - availability.REPL
+            ppm = avp.value(pid, DAY)
             miss += p_out * m * v
+            mpts += p_out * m * ppm        # v3: expected missing points and minutes
+            mmin += p_out * m
             players.append({"player_id": int(pid), "player": names.get(pid, str(pid)), "min": round(m, 1),
-                            "value": round(v, 3), "p_out": round(p_out, 2)})
-        return tid, miss, players, bool(last_day.get(tid, -9) == DAY - 1)
+                            "value": round(v, 3), "pts_min": round(ppm, 3), "p_out": round(p_out, 2)})
+        return tid, miss, players, bool(last_day.get(tid, -9) == DAY - 1), mpts, mmin
 
     games = []
     for gm in slate.values():
-        ht, hmiss, hpl, hb2b = team_side(gm["home"])
-        at, amiss, apl, ab2b = team_side(gm["away"])
+        ht, hmiss, hpl, hb2b, hpa, hpb = team_side(gm["home"])
+        at, amiss, apl, ab2b, apa, apb = team_side(gm["away"])
         ih, ia = f.idx[ht], f.idx[at]
         pace = bp[0] + bp[1 + ih] + bp[1 + ia]
         ex = bo[1 + 2 * n:]   # home, b2b own, b2b opp, miss own, miss opp
@@ -141,6 +147,11 @@ def main():
         ex1 = bo1[1 + 2 * n:]
         v1h = pace1 * (bo1[0] + bo1[1 + ih] + bo1[1 + n + ia] + ex1 @ np.array([1, hb2b, ab2b]))
         v1a = pace1 * (bo1[0] + bo1[1 + ia] + bo1[1 + n + ih] + ex1 @ np.array([0, ab2b, hb2b]))
+        # v3 (extras: home, b2b own, b2b opp, missing pts own, missing min own, missing pts opp, missing min opp)
+        pace3 = bp3[0] + bp3[1 + ih] + bp3[1 + ia] + bp3[1 + n:] @ np.array([hpa + apa, hpb + apb])
+        ex3 = bo3[1 + 2 * n:]
+        v3h = pace3 * (bo3[0] + bo3[1 + ih] + bo3[1 + n + ia] + ex3 @ np.array([1, hb2b, ab2b, hpa, hpb, apa, apb]))
+        v3a = pace3 * (bo3[0] + bo3[1 + ia] + bo3[1 + n + ih] + ex3 @ np.array([0, ab2b, hb2b, apa, apb, hpa, hpb]))
         ln = lines_for(raw, gm["home"], gm["away"])
         games.append({**gm, "proj_home": round(ph, 1), "proj_away": round(pa, 1), "proj_total": round(ph + pa, 1),
                       "proj_spread_home": round(pa - ph, 1), "proj_pace": round(pace, 1),
@@ -149,6 +160,9 @@ def main():
                       "edge_total": None if ln["total"] is None else round(ph + pa - ln["total"], 1),
                       "v1_home": round(v1h, 1), "v1_away": round(v1a, 1), "v1_total": round(v1h + v1a, 1),
                       "v1_edge_total": None if ln["total"] is None else round(v1h + v1a - ln["total"], 1),
+                      "v3_home": round(v3h, 1), "v3_away": round(v3a, 1), "v3_total": round(v3h + v3a, 1),
+                      "v3_pace": round(pace3, 1), "home_missing_pts": round(hpa, 1), "away_missing_pts": round(apa, 1),
+                      "v3_edge_total": None if ln["total"] is None else round(v3h + v3a - ln["total"], 1),
                       "cons": {k: next((r.get(k) for r in raw if r["home"] == gm["home"] and r["away"] == gm["away"]
                                         and r["book"] == "consensus"), None)
                                for k in ("total", "over", "under", "spread_home", "spread_home_line", "spread_away_line")},
@@ -218,7 +232,7 @@ def main():
             gm[k] = sorted(gm[k], key=lambda x: -x["min"])
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     out = {"generated_et": NOW.strftime("%Y-%m-%d %H:%M"), "date": str(TODAY),
-           "model": {"team": f"v2 (half_life {tm.HALF_LIFE}, lam {tm.LAM}, repl {availability.REPL})",
+           "model": {"team": f"v1 / v2 / v3 (half_life {tm.HALF_LIFE}, lam {tm.LAM}, v2 repl {availability.REPL})",
                      "props": f"v1 (min_hl {pm.MIN_HL}, rate_hl {pm.RATE_HL}, K {pm.K})"},
            "games": games, "props": props}
     json.dump(out, open(OUT, "w"), indent=1, default=lambda x: x.item() if hasattr(x, "item") else str(x))
