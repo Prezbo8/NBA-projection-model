@@ -14,6 +14,7 @@ Projected points = pace * ppp. Teams are nba.com TEAM_IDs (stable through Seattl
   python src/team_model.py tune                       # grid of half_life x lam on 2015-16 .. 2020-21
   python src/team_model.py tune_avail                 # grid of replacement x away_days on 2015-16 .. 2020-21
   python src/team_model.py backtest 2007-08 2026-27   # writes data/backtest/team_preds.csv (add --v1 for v1)
+  python src/team_model.py ablate_v3                  # v3 candidates (availability for totals); with_v3() = winner
 """
 import glob
 import itertools
@@ -215,6 +216,24 @@ def with_missing(g, f, repl=REPL, away_days=AWAY_DAYS):
     A, B = availability.team_missing_parts(g, av, away_days)
     f.set_missing(A - repl * B)
     return av
+
+
+V3_PPP = ["pa", "pb", "opp_pa", "opp_pb"]   # own / opponent: missing points, missing minutes
+V3_PACE = ["pa_sum", "pb_sum"]                # both teams together
+
+
+def with_v3(g, f, players=None):
+    """v3 totals (Nov 8 2026, ablate_v3 'D'): availability built for totals. Per team: pa = sum of expected
+    minutes x points/min (365 d, shrunk) over missing regulars, pb = their minutes. Separate pa / pb terms let
+    the fit learn the replacement level. Used in ppp (own and opponent) AND in pace (missing scorers slow
+    games). Tune 2021-24 MAE total 14.833 (v1) -> 14.746; test 2024-26 14.844 -> 14.779 (both seasons better)."""
+    avp = availability.Availability(availability.load_players() if players is None else players, stat="PTS")
+    PA, PB = availability.team_missing_parts(g, avp)
+    g["pa"], g["pb"], g["opp_pa"], g["opp_pb"] = PA, PB, f.opp_of(PA), f.opp_of(PB)
+    g["pa_sum"], g["pb_sum"] = g.pa + g.opp_pa, g.pb + g.opp_pb
+    f.set_features(V3_PPP)
+    f.set_pace_features(V3_PACE)
+    return avp
 
 
 if __name__ == "__main__":

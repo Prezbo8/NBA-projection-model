@@ -105,7 +105,7 @@ function outs(pl){
 }
 function pills(g){
   return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id))
-    .map(b=>`<div class="paperpill">LOGGED ${b.strategy==="v1_total"?"v1 "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
+    .map(b=>`<div class="paperpill">LOGGED ${b.strategy.endsWith("_total")?b.strategy.slice(0,2)+" "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
 }
 function games(){
   if(!D.games.length) return '<div class="card" style="padding:14px">No games today.</div>';
@@ -113,9 +113,9 @@ function games(){
     <td><span class="time">${ET(g.start_utc)}</span></td>
     <td class="mu"><b>${g.away}</b>${g.away_b2b?'<span class="b2b">B2B</span>':""} @ <b>${g.home}</b>${g.home_b2b?'<span class="b2b">B2B</span>':""}
       <div class="small">${f1(g.v1_away)} – ${f1(g.v1_home)} · pace ${f1(g.proj_pace)}</div></td>
-    <td class="num"><b>${f1(g.v1_total)}</b><div class="small">v2 ${f1(g.proj_total)}</div></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
-    <td class="num"><span class="edge ${ecls(g.v1_edge_total,1.5,PLAY,6)}">${sg(g.v1_edge_total)}</span><div class="small">v2 ${sg(g.edge_total)}</div></td>
-    <td>${g.v1_edge_total!=null&&Math.abs(g.v1_edge_total)>=PLAY?`<b>${g.v1_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</b>`:'<span class="small">pass</span>'}${pills(g)}</td>
+    <td class="num"><b>${f1(g.v1_total)}</b><div class="small">v3 ${f1(g.v3_total)}</div></td><td class="num">${f1(g.total)}<div class="small">open ${f1(g.open_total)}</div></td>
+    <td class="num"><span class="edge ${ecls(g.v1_edge_total,1.5,PLAY,6)}">${sg(g.v1_edge_total)}</span><div class="small">v3 ${sg(g.v3_edge_total)}</div></td>
+    <td>${g.v1_edge_total!=null&&Math.abs(g.v1_edge_total)>=PLAY?`<b>${g.v1_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</b>`:'<span class="small">pass</span>'}${g.v3_edge_total!=null&&Math.abs(g.v3_edge_total)>=PLAY?`<div class="small">v3: ${g.v3_edge_total>0?"OVER":"UNDER"} ${f1(g.total)}</div>`:""}${pills(g)}</td>
     <td class="num hide-m">${g.home} ${sg(g.proj_spread_home)}<div class="small">line ${sg(g.spread_home)} · edge ${sg(g.edge_spread)}</div></td>
     <td class="hide-m"><span class="out"><b>${g.away}</b> ${outs(g.away_players)}</span><span class="out"><b>${g.home}</b> ${outs(g.home_players)}</span></td></tr>`).join("");
   return `<div class="card"><table><thead><tr><th>Time</th><th>Matchup · v1 proj score</th><th class="num">Proj total (v1)</th>
@@ -152,7 +152,7 @@ function props(){
 }
 props();
 function paper(){
-  const P = D.paper||[], name = {v1_total:"v1 totals (edge ≥ 3)", v2_spread:"v2 spreads, injury signal (edge ≥ 3)"};
+  const P = D.paper||[], name = {v1_total:"v1 totals (edge ≥ 3)", v3_total:"v3 totals, v1 + injuries (edge ≥ 3, from Nov 8)", v2_spread:"v2 spreads, injury signal (edge ≥ 3)"};
   const rec = Object.keys(name).map(s=>{ const b=P.filter(x=>x.strategy===s), g=b.filter(x=>x.result);
     const w=g.filter(x=>x.result==="W").length, l=g.filter(x=>x.result==="L").length, p=g.filter(x=>x.result==="P").length;
     const u=g.reduce((a,x)=>a+(+x.units||0),0), risk=g.filter(x=>x.result!=="P").length;
@@ -162,9 +162,9 @@ function paper(){
       <div class="small">${b.length} logged · ${g.length} graded · ROI ${risk?(u/risk*100).toFixed(1)+"%":"–"}</div>
       <div class="small">vs closing line: ${clv==null?"–":(clv>=0?"+":"")+clv.toFixed(2)+" pts avg, beat the close "+beat+"/"+cl.length}</div></div>`; }).join("");
   const rows = P.slice().sort((a,b)=>b.start_utc.localeCompare(a.start_utc)).slice(0,200).map(b=>`<tr>
-    <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy==="v1_total"?"v1 total":"v2 spread"}</td>
-    <td><b>${b.strategy==="v1_total"?b.side+" "+f1(b.line):b.side+" "+sg(b.line)}</b> <span class="small">${b.odds>0?"+":""}${b.odds}</span></td>
-    <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}<br>open ${b.open_line!=null&&b.open_line!==""?(b.strategy==="v1_total"?f1(b.open_line):sg(b.open_line)):"–"}${b.close_line!=null&&b.close_line!==""?" · close "+(b.strategy==="v1_total"?f1(b.close_line):sg(b.close_line)):""}</td>
+    <td>${b.date}</td><td>${b.away} @ ${b.home}</td><td>${b.strategy.endsWith("_total")?b.strategy.slice(0,2)+" total":"v2 spread"}</td>
+    <td><b>${b.strategy.endsWith("_total")?b.side+" "+f1(b.line):b.side+" "+sg(b.line)}</b> <span class="small">${b.odds>0?"+":""}${b.odds}</span></td>
+    <td class="num">${f1(b.proj)}</td><td class="num">${sg(b.edge)}</td><td class="small">${b.logged_et}<br>open ${b.open_line!=null&&b.open_line!==""?(b.strategy.endsWith("_total")?f1(b.open_line):sg(b.open_line)):"–"}${b.close_line!=null&&b.close_line!==""?" · close "+(b.strategy.endsWith("_total")?f1(b.close_line):sg(b.close_line)):""}</td>
     <td>${b.result?`<span class="${b.result}">${b.result}</span> <span class="small">${b.away_pts}-${b.home_pts} · ${(+b.units>=0?"+":"")+(+b.units).toFixed(2)}u</span>`:'<span class="small">pending</span>'}</td></tr>`).join("");
   document.getElementById("paper").innerHTML = `<div class="rec">${rec}</div><div class="card"><table><thead><tr><th>Date</th><th>Game</th>
     <th>Strategy</th><th>Bet (logged line, price)</th><th class="num">Proj</th><th class="num">Edge</th><th>Logged (ET) · open / close</th><th>Result</th>
