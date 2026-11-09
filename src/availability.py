@@ -37,7 +37,9 @@ def load_players():
 
 
 class Availability:
-    def __init__(self, p):
+    def __init__(self, p, stat="gmsc"):
+        """stat: per-game column that measures a player's value (gmsc = Game Score; PTS = points only)."""
+        p = p.assign(gmsc=p[stat])
         self.league_rate = p.gmsc.sum() / p.MIN.sum()
         # per player: appearance days, teams, cumulative minutes / game score (for 365-day value windows)
         self.days, self.teams, self.cmin, self.cgs = {}, {}, {}, {}

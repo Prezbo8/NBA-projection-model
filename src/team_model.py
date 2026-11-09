@@ -114,11 +114,20 @@ class Fitter:
         self.miss = self.opp_miss = None   # set_missing() turns on the v2 availability terms
         self.feat = np.zeros((len(g), 0))  # set_features() adds experimental terms (v3 candidates)
         self.pace_hl = None                # None: pace uses the same half-life as ppp
+        self.pace_feat = np.zeros((len(g), 0))  # set_pace_features(): extra unpenalized pace terms (v3 candidates)
 
     def set_features(self, cols):
         """Extra unpenalized ppp terms, e.g. ['rested', 'opp_rested', 'three4', 'opp_three4', 'travel', 'opp_travel']."""
         self.feat_cols = list(cols)
         self.feat = self.g[self.feat_cols].to_numpy(float) if cols else np.zeros((len(self.g), 0))
+
+    def set_pace_features(self, cols):
+        self.pace_feat = self.g[list(cols)].to_numpy(float) if cols else np.zeros((len(self.g), 0))
+
+    def opp_of(self, own):
+        """The opponent's value of a per-row array (from the other row of the same game)."""
+        key = dict(zip(zip(self.g.GAME_ID, self.g.TEAM_ID), own))
+        return np.array([key[(gid, o)] for gid, o in zip(self.g.GAME_ID, self.g.OPP_ID)])
 
     def set_missing(self, own):
         """own: missing value per row. The opponent's value comes from the other row of the same game."""
@@ -138,7 +147,8 @@ class Fitter:
         Xp[:, 0] = 1
         Xp[np.arange(k), 1 + self.team[rows]] += 1
         Xp[np.arange(k), 1 + self.opp[rows]] += 1
-        bp = ridge(Xp, self.poss[rows], wp, np.r_[0, np.ones(n)], lam)
+        Xp = np.hstack([Xp, self.pace_feat[rows]])
+        bp = ridge(Xp, self.poss[rows], wp, np.r_[0, np.ones(n), np.zeros(self.pace_feat.shape[1])], lam)
         # ppp: intercept + off[team] + def[opp] + home + b2b_own + b2b_opp
         extra = self.extras(rows)
         Xo = np.zeros((k, 1 + 2 * n))
@@ -159,7 +169,7 @@ class Fitter:
 
     def predict(self, rows, bp, bo):
         n = self.n
-        pace = bp[0] + bp[1 + self.team[rows]] + bp[1 + self.opp[rows]]
+        pace = bp[0] + bp[1 + self.team[rows]] + bp[1 + self.opp[rows]] + self.pace_feat[rows] @ bp[1 + n:]
         ppp = bo[0] + bo[1 + self.team[rows]] + bo[1 + n + self.opp[rows]] + self.extras(rows) @ bo[1 + 2 * n:]
         return pace, ppp
 
@@ -174,7 +184,7 @@ def run(g, f, seasons, half_life, lam):
         bp, bo = f.fit(day, half_life, lam)
         pace, ppp = f.predict(rows, bp, bo)
         out[rows], pace_out[rows] = pace * ppp, pace
-    f.last_extras = bo[1 + 2 * f.n:]  # home, b2b own/opp, (miss own/opp) from the last fit
+    f.last_extras = np.r_[bo[1 + 2 * f.n:], bp[1 + f.n:]]  # ppp extras, then pace extras, from the last fit
     return out, pace_out
 
 
@@ -242,6 +252,33 @@ if __name__ == "__main__":
                 mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
                 print(f"{ver} | {name:<26} | {mt:9.3f} | {mm:10.3f} | " + ", ".join(f"{x:+.4f}" for x in f.last_extras),
                       flush=True)
+        sys.exit()
+    if args[0] == "ablate_v3":
+        # v3 candidates: availability built for TOTALS. Scored on TUNE_SEASONS (MAE total is what counts).
+        #  v1 | v2 | B: v2 + missing in pace | C: points-based missing (A, B fitted -> free replacement level)
+        #  | D: C + pace
+        players = availability.load_players()
+        av = availability.Availability(players)
+        A, B = availability.team_missing_parts(g, av)
+        gs = A - REPL * B
+        avp = availability.Availability(players, stat="PTS")
+        PA, PB = availability.team_missing_parts(g, avp)
+        g["gs_sum"] = gs + f.opp_of(gs)
+        g["pa"], g["pb"], g["opp_pa"], g["opp_pb"] = PA, PB, f.opp_of(PA), f.opp_of(PB)
+        g["pa_sum"], g["pb_sum"] = g.pa + g.opp_pa, g.pb + g.opp_pb
+        configs = [("v1", None, [], []), ("v2", gs, [], []), ("B v2+pace", gs, [], ["gs_sum"]),
+                   ("C pts", None, ["pa", "pb", "opp_pa", "opp_pb"], []),
+                   ("D pts+pace", None, ["pa", "pb", "opp_pa", "opp_pb"], ["pa_sum", "pb_sum"])]
+        print("config | MAE total | MAE margin | last fit extras (home, b2b, b2b opp, [miss], ppp feats..., pace feats...)  ("
+              + ", ".join(TUNE_SEASONS) + ")")
+        for name, miss, feats, pfeats in configs:
+            f.miss = f.opp_miss = None
+            if miss is not None:
+                f.set_missing(miss)
+            f.set_features(feats)
+            f.set_pace_features(pfeats)
+            mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
+            print(f"{name:<11} | {mt:9.3f} | {mm:10.3f} | " + ", ".join(f"{x:+.4f}" for x in f.last_extras), flush=True)
         sys.exit()
     if not v1 and args[0] in ("tune", "backtest"):
         with_missing(g, f)
