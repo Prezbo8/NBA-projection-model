@@ -1,0 +1,26 @@
+name: DARKO (private)
+
+# Daily DARKO DPM snapshot (licensed data) -> PRIVATE Supabase bucket nba-private/darko/<date>.csv.gz.
+# Nothing is committed and nothing licensed is printed: this repo and its Actions logs are public.
+on:
+  schedule:
+    - cron: "20 14 * * *"   # 9:20 AM EST: DARKO has the night's games by then
+  workflow_dispatch: {}
+concurrency: {group: darko, cancel-in-progress: false}
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions: {contents: read}
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas
+      - name: Private storage check (bucket exists, private, key works)
+        run: python src/private_store.py check
+      - name: DARKO snapshot
+        run: python src/darko.py
