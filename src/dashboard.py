@@ -67,8 +67,9 @@ footer{margin-top:16px;font-size:12px;color:var(--muted)}
   <div class="banner"><b>Paper trading only. No real bets.</b> The focus is <b>game totals</b>: v1 beat the <i>opening</i>
     total 55.2% in 2023-26 (1,785 bets with edge &ge; 3, +97.4 u at -110; the line then moved toward the model 63% of the time) but lost to the closing line, so plays are logged
     at the line when first flagged and judged by closing-line value. Spreads (v2) are untested; props have no edge.</div>
-  <div class="switch"><button class="on" data-tab="games">Totals</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
+  <div class="switch"><button class="on" data-tab="games">Totals</button><button data-tab="tomorrow" id="tmb" hidden>Tomorrow (near the open)</button><button data-tab="paper">Paper record</button><button data-tab="props">Props (no edge)</button></div>
   <div id="games"></div>
+  <div id="tomorrow" hidden></div>
   <div id="props" hidden>
     <div class="banner" style="border-left-color:var(--muted)">Backtest 2023-26 (500k+ props): the market's line beat the model in
       every market, and real over rates track the market's price, not the model's. The lean column is the model's opinion only.</div>
@@ -107,9 +108,9 @@ function pills(g){
   return (D.paper||[]).filter(b=>String(b.an_game_id)===String(g.an_game_id))
     .map(b=>`<div class="paperpill">LOGGED ${b.strategy.endsWith("_total")?b.strategy.slice(0,2)+" "+b.side+" "+f1(b.line):"v2 "+b.side+" "+sg(b.line)}</div>`).join("");
 }
-function games(){
-  if(!D.games.length) return '<div class="card" style="padding:14px">No games today.</div>';
-  const rows = D.games.slice().sort((a,b)=>a.start_utc.localeCompare(b.start_utc)).map(g=>`<tr>
+function games(list){
+  if(!list.length) return '<div class="card" style="padding:14px">No games today.</div>';
+  const rows = list.slice().sort((a,b)=>a.start_utc.localeCompare(b.start_utc)).map(g=>`<tr>
     <td><span class="time">${ET(g.start_utc)}</span></td>
     <td class="mu"><b>${g.away}</b>${g.away_b2b?'<span class="b2b">B2B</span>':""} @ <b>${g.home}</b>${g.home_b2b?'<span class="b2b">B2B</span>':""}
       <div class="small">${f1(g.v1_away)} – ${f1(g.v1_home)} · pace ${f1(g.proj_pace)}</div></td>
@@ -122,7 +123,14 @@ function games(){
     <th class="num">Total line</th><th class="num">Edge (v1)</th><th>Play</th><th class="num hide-m">Spread (v2, secondary)</th>
     <th class="hide-m">Injuries (Rotowire / ESPN)</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-document.getElementById("games").innerHTML = games();
+document.getElementById("games").innerHTML = games(D.games);
+if(D.tomorrow && D.tomorrow.games.length){
+  document.getElementById("tmb").hidden = false;
+  document.getElementById("tomorrow").innerHTML = `<div class="banner">${D.tomorrow.date} · projected ${D.tomorrow.generated_et} ET.
+    NBA totals open the night before and move a lot by tip-off; v1's edge was against the <i>opening</i> line, so plays are
+    paper-logged here at the first line that flags them. Injuries: ESPN only (Rotowire lists tonight's games), so v3 sees less than it will tomorrow.</div>`
+    + games(D.tomorrow.games);
+}
 
 let mkt = "all", q = "", sortKey = "gap";
 const mkts = ["all", ...Object.keys(MK).filter(m=>D.props.some(p=>p.market===m))];
@@ -174,7 +182,7 @@ function paper(){
 paper();
 document.querySelector(".switch").addEventListener("click", e=>{ const t=e.target.dataset.tab; if(!t) return;
   document.querySelectorAll(".switch button").forEach(b=>b.classList.toggle("on", b.dataset.tab===t));
-  ["games","props","paper"].forEach(x=>document.getElementById(x).hidden = t!==x); });
+  ["games","tomorrow","props","paper"].forEach(x=>document.getElementById(x).hidden = t!==x); });
 document.getElementById("foot").innerHTML = "Lines: Action Network consensus (current) and opening line. Injuries: Rotowire play-chance, ESPN as backup. "
   + "Model over chance uses each market's fitted outcome spread (backtest 2021-23); on 2023-26 lines the market's no-vig price was better calibrated. "
   + '<a href="https://github.com/Prezbo8/NBA-projection-model">Code</a>';
@@ -184,6 +192,11 @@ document.getElementById("foot").innerHTML = "Lines: Action Network consensus (cu
 
 if __name__ == "__main__":
     data = json.load(open(SRC))
+    tmr = os.path.join(ROOT, "docs", "tomorrow.json")
+    if os.path.exists(tmr):
+        t = json.load(open(tmr))
+        if t["date"] > data["date"]:                  # skip a stale file from an earlier day
+            data["tomorrow"] = {k: t[k] for k in ("date", "generated_et", "games")}
     log = os.path.join(ROOT, "data", "paper", "paper_trades.csv")
     if os.path.exists(log):
         import pandas as pd
