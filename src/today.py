@@ -60,13 +60,20 @@ def no_vig(over, under):
     return a / (a + b)
 
 
+# ESPN 'Day-To-Day' players: chance of sitting from the note's wording (Rotowire's play % wins when it lists him;
+# Rotowire only covers today's games, so tomorrow's slate depends on these)
+DTD = (("doubtful", 0.75), ("questionable", 0.5), ("probable", 0.15))
+
+
 def out_probs():
-    """{(team, normalized name): P(out)} from Rotowire, with ESPN 'Out' as a fallback."""
+    """{(team, normalized name): P(out)} from Rotowire, with ESPN as a fallback (Out = 1, Day-To-Day by its note)."""
     probs = {}
     try:
         for r in gameday.injuries():
-            if (r.get("status") or "").lower() == "out":
-                probs[(r["team"], norm(r["player"]))] = 1.0
+            st, note = (r.get("status") or "").lower(), (r.get("comment") or "").lower()
+            p = 1.0 if st == "out" else next((v for k, v in DTD if k in note), None) if st == "day-to-day" else None
+            if p is not None:
+                probs[(r["team"], norm(r["player"]))] = p
     except Exception as e:
         print("ESPN injuries failed:", e)
     try:
