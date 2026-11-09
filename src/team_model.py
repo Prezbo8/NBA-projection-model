@@ -269,6 +269,9 @@ if __name__ == "__main__":
         configs = [("v1", None, [], []), ("v2", gs, [], []), ("B v2+pace", gs, [], ["gs_sum"]),
                    ("C pts", None, ["pa", "pb", "opp_pa", "opp_pb"], []),
                    ("D pts+pace", None, ["pa", "pb", "opp_pa", "opp_pb"], ["pa_sum", "pb_sum"])]
+        only = os.environ.get("CONFIGS")   # e.g. "v1,v2,D pts+pace" (one look at the test seasons for the winner)
+        if only:
+            configs = [c for c in configs if c[0] in only.split(",")]
         print("config | MAE total | MAE margin | last fit extras (home, b2b, b2b opp, [miss], ppp feats..., pace feats...)  ("
               + ", ".join(TUNE_SEASONS) + ")")
         for name, miss, feats, pfeats in configs:
@@ -277,7 +280,10 @@ if __name__ == "__main__":
                 f.set_missing(miss)
             f.set_features(feats)
             f.set_pace_features(pfeats)
-            mt, mm = score(per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM)))
+            pg = per_game(g, *run(g, f, TUNE_SEASONS, HALF_LIFE, LAM))
+            mt, mm = score(pg)
+            by = " ".join(f"{s} {score(d)[0]:.3f}" for s, d in pg.groupby("season"))
+            print(f"[{by}]")
             print(f"{name:<11} | {mt:9.3f} | {mm:10.3f} | " + ", ".join(f"{x:+.4f}" for x in f.last_extras), flush=True)
         sys.exit()
     if not v1 and args[0] in ("tune", "backtest"):
