@@ -1,0 +1,60 @@
+name: nba.com tracking
+
+# Team tracking / hustle stats for each game day (one nba.com request per measure per day), saved to data/tracking.
+#   fetch (Mac runner): only talks to nba.com, uploads data/tracking as an artifact (also when stopped
+#         early, so nothing fetched is lost). Read-only token. Resumable: saved days are skipped.
+#   load  (GitHub runner): checks the files and commits them.
+# Backfill only for now (no schedule): it feeds research/tracking_totals.py.
+# SECURITY: the repo is public, so the Mac job may only be started by hand.
+on:
+  workflow_dispatch:
+    inputs:
+      first: {description: "First season", default: "2021-22"}
+      last:  {description: "Last season", default: "2025-26"}
+      limit: {description: "Max days per season (empty = all)", default: ""}
+concurrency: {group: nbatracking, cancel-in-progress: false}
+jobs:
+  fetch:
+    runs-on: [self-hosted, nba-stats]
+    timeout-minutes: 900
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Python env (throwaway venv; nothing installed into the Mac's Python)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install -q curl_cffi pandas
+      - name: Download from nba.com
+        env: {FIRST: "${{ inputs.first }}", LAST: "${{ inputs.last }}", LIMIT: "${{ inputs.limit }}"}
+        run: '"$RUNNER_TEMP/venv/bin/python" src/nbatracking.py "$FIRST" "$LAST" ${LIMIT:+--limit $LIMIT}'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with: {name: tracking, path: data/tracking, retention-days: 7, if-no-files-found: ignore}
+
+  load:
+    needs: fetch
+    if: always() && needs.fetch.result != 'skipped'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {contents: write, actions: read}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with: {python-version: "3.14"}
+      - run: pip install -q pandas
+      - uses: actions/download-artifact@v8
+        with: {name: tracking, path: data/tracking}
+      - name: Check the data
+        run: set -o pipefail; python src/nbatracking.py --check | tee check.txt
+      - name: Commit
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/tracking
+          git diff --cached --quiet || git commit -m "nba.com tracking ${{ inputs.first }} ${{ inputs.last }}"
+          for i in 1 2 3; do git pull --rebase -q && git push && break; sleep 10; done
+      - name: Summary
+        if: always()
+        run: |
+          { echo '```'; cat check.txt 2>/dev/null; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
