@@ -205,7 +205,7 @@ function everyGame(){
     return {r, T, M, v1:lean(+r.v1_total,+r.total,T), v3:lean(r.v3_total==null||r.v3_total===""?null:+r.v3_total,+r.total,T), s3:sp("v3_spread_home"), s1:sp("v1_spread_home")}; });
   const tag = v => v ? `<span class="${v}">${v}</span>` : '<span class="small">–</span>';
   const rows = R.slice().sort((a,b)=>b.r.start_utc.localeCompare(a.r.start_utc)).slice(0,80).map(({r,T,M,v1,v3,s3,s1})=>`<tr>
-    <td>${r.date}</td><td>${r.away} @ ${r.home}</td><td class="num"><b>${r.away_pts}-${r.home_pts}</b><div class="small">total ${T} · ${r.home} ${sg(M)}</div></td>
+    <td>${r.date}</td><td>${r.away} @ ${r.home}</td><td class="num"><b>${r.away_pts}-${r.home_pts}</b><div class="small">total ${T} · ${M>0?r.home+" by "+M:M<0?r.away+" by "+(-M):"tie"}</div></td>
     <td class="num">${f1(+r.total)}<div class="small">close ${f1(r.close_total===""?null:r.close_total)}</div></td>
     <td class="num">${f1(+r.v1_total)} ${tag(v1)}<div class="small">v3 ${f1(r.v3_total===""?null:r.v3_total)} ${tag(v3)}</div></td>
     <td class="num sep">${r.home} ${sg(r.spread_home===""?null:+r.spread_home)}<div class="small">close ${sg(r.close_spread_home===""?null:r.close_spread_home)}</div></td>
