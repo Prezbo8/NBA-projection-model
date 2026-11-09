@@ -27,12 +27,12 @@ SHOT = {**BASE, "CloseDefDistRange": "", "DribbleRange": "", "GeneralRange": "",
 team_games = pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "nbacom",
                                       f"team_games_{SEASON}.csv.gz"))
 GAME = f"{int(team_games.GAME_ID.iloc[-1]):010d}"
-DAY = pd.to_datetime(team_games.GAME_DATE.iloc[-1]).strftime("%m/%d/%Y")
+DAY = pd.to_datetime(team_games[team_games.SEASON_TYPE == "Regular Season"].GAME_DATE.iloc[-1]).strftime("%m/%d/%Y")
 
 PROBES = [
     # (label, side, endpoint, params)
     ("drives (team)", "OFF", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Team", "PtMeasureType": "Drives"}),
-    ("touches (player)", "OFF", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Player", "PtMeasureType": "Touches"}),
+    ("touches (player)", "OFF", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Player", "PtMeasureType": "Possessions"}),
     ("passing (team)", "OFF", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Team", "PtMeasureType": "Passing"}),
     ("speed/distance (team)", "BOTH", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Team", "PtMeasureType": "SpeedDistance"}),
     ("catch & shoot (team)", "OFF", "leaguedashptstats", {**BASE, "PlayerOrTeam": "Team", "PtMeasureType": "CatchShoot"}),
@@ -42,7 +42,7 @@ PROBES = [
     ("shots by defender 0-2 ft (team)", "OFF", "leaguedashteamptshot", {**SHOT, "CloseDefDistRange": "0-2 Feet - Very Tight"}),
     ("catch & shoot shots (team)", "OFF", "leaguedashteamptshot", {**SHOT, "GeneralRange": "Catch and Shoot"}),
     ("ALLOWED wide open 6+ ft", "DEF", "leaguedashoppptshot", {**SHOT, "CloseDefDistRange": "6+ Feet - Wide Open"}),
-    ("ALLOWED pull-ups", "DEF", "leaguedashoppptshot", {**SHOT, "GeneralRange": "Pull Ups"}),
+    ("ALLOWED pull-ups", "DEF", "leaguedashoppptshot", {**SHOT, "GeneralRange": "Pullups"}),
     ("defended FG% (team)", "DEF", "leaguedashptteamdefend", {**BASE, "DefenseCategory": "Overall"}),
     ("defended FG% at rim (player)", "DEF", "leaguedashptdefend", {**BASE, "DefenseCategory": "Less Than 6Ft"}),
     ("hustle (team)", "BOTH", "leaguehustlestatsteam", BASE),
