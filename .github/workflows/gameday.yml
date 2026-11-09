@@ -9,13 +9,13 @@ on:
   schedule:
     - cron: "30 14 * * *"         # 9:30 AM EST: right after the Mac's nba.com update, so paper bets log near the open
     - cron: "15 16,20,23 * * *"   # 11:15 AM, 3:15 PM, 6:15 PM EST
-    - cron: "15 2 * * *"          # 9:15 PM EST
+    - cron: "30 1 * * *"          # 8:30 PM EST, then watches for tomorrow's openers until 12:30 AM (step below)
   workflow_dispatch: {}
 concurrency: {group: gameday, cancel-in-progress: false}
 jobs:
   gameday:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 270
     permissions: {contents: write, issues: write}
     env: {TZ: America/New_York, GH_TOKEN: "${{ github.token }}"}
     steps:
@@ -32,6 +32,25 @@ jobs:
           # so paper bets get logged near the opening line (v1's backtest edge was vs the open)
           tomorrow() { if [ "$(date +%H)" -ge 15 ]; then python src/today.py --tomorrow || echo "tomorrow's slate failed (today's still runs)"; fi; }
           { python src/today.py && tomorrow && python src/paper.py && python src/dashboard.py; } | tee -a gameday.txt
+      - name: Watch for tomorrow's openers (evening run only)
+        # totals for tomorrow open ~9:30 PM ET and move fast: log paper bets within ~5 min of a line appearing
+        run: |
+          [ "$(date +%H)" -ge 20 ] || exit 0
+          end=$(date -d "tomorrow 00:30" +%s)
+          while [ "$(date +%s)" -lt "$end" ]; do
+            n=$(python src/watch_openers.py || echo 0)
+            [ "$n" = done ] && { echo "every game on tomorrow's slate is logged"; break; }
+            if [ "$n" -gt 0 ]; then
+              echo "$(date +%H:%M) $n new game(s) with lines"
+              python src/today.py --tomorrow && python src/paper.py && python src/dashboard.py || true
+              git config user.name "github-actions[bot]"
+              git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+              git add data/paper docs/index.html
+              git diff --cached --quiet || git commit -qm "Openers: tomorrow's paper bets $(date +'%Y-%m-%d %H:%M')"
+              for i in 1 2 3 4 5; do git pull --rebase -q && git push -q && break; sleep $((i * 5)); done
+            fi
+            sleep 300
+          done
       - name: Commit
         if: always()
         run: |
