@@ -32,6 +32,18 @@ Era split (user decision Nov 8 2026: focus on 2021-26, when pace and scoring ros
   Same regression: v1 edge vs the close has coefficient -0.10 (t -2.1), i.e. v1's disagreement with the close is
   slightly anti-predictive (matches its F at the close).
 
+## Pace matchups (research/pace_matchups.py, 2021-22 .. 2026-27 to Nov 8, 6,289 games)
+Tier = previous-20-game possessions, thirds within season. Over% vs CLOSE 47.5-51.8% in every matchup = no edge.
+Vs OPEN: top vs top 53.2% over (693 g, z ~1.7; seasons 50.7/56.9/50.4/55.5/58.0), mid vs mid 46.3% over (= 53.7%
+under, 656 g). Openers under-react to pace extremes and the line corrects: open -> close +1.34 top/top, -0.99
+trash/trash, and fast matchups move most (|move| 3.71 vs 2.94). Borderline, and 12 cells tested (multiple
+comparisons) - a hint that supports logging at the open, not a strategy. 2026-27 so far: unders 57% (small sample).
+
+## Opening line (Nov 8 2026)
+Nov 9 totals were up by 11:16 PM ET the night before and had already moved (DEN/HOU 222.5 -> 217.5), so the
+9:30 AM run logged ~12 h after the open. Now the 3:15 / 6:15 / 9:15 PM ET runs also project tomorrow
+(`today.py --tomorrow`) and paper-log then. data/paper/slate.csv (first-seen line vs open) will show when openers post.
+
 ## Props
 | Idea | Verdict | Numbers |
 |---|---|---|
