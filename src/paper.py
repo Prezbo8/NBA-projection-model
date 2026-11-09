@@ -96,6 +96,7 @@ def log(path):
 
 def grade():
     trades = load(LOG, COLS).reindex(columns=COLS)
+    trades["result"] = trades.result.astype(object)   # all-NaN loads as float; pandas 3 won't put "W" in it
     open_ = trades.result.isna()
     finals = read_all(os.path.join(ROOT, "data", "odds", "*", "*_games.csv.gz"))
     if not len(finals):
