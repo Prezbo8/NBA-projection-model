@@ -26,7 +26,12 @@ jobs:
       - name: Snapshot + health
         run: python src/gameday.py | tee gameday.txt
       - name: Dashboard (today's projections)
-        run: set -o pipefail; { python src/today.py && python src/paper.py && python src/dashboard.py; } | tee -a gameday.txt
+        run: |
+          set -o pipefail
+          # afternoon/evening runs also project tomorrow's slate: NBA totals open the night before and move a lot,
+          # so paper bets get logged near the opening line (v1's backtest edge was vs the open)
+          tomorrow() { if [ "$(date +%H)" -ge 15 ]; then python src/today.py --tomorrow || echo "tomorrow's slate failed (today's still runs)"; fi; }
+          { python src/today.py && tomorrow && python src/paper.py && python src/dashboard.py; } | tee -a gameday.txt
       - name: Commit
         if: always()
         run: |

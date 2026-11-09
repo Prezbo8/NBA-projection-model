@@ -13,7 +13,7 @@ at the logged American odds: win = odds/100 or 100/|odds|, loss = -1, push = 0.
 
 Also keeps data/paper/slate.csv: every game's first-seen line + projections, for later threshold studies.
 
-  python src/paper.py          # log from docs/today.json, then grade
+  python src/paper.py          # log from docs/today.json (+ docs/tomorrow.json if there), then grade
 """
 import json
 import os
@@ -27,7 +27,7 @@ from names import read_all
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 LOG = os.path.join(ROOT, "data", "paper", "paper_trades.csv")
 SLATE = os.path.join(ROOT, "data", "paper", "slate.csv")
-TODAY = os.path.join(ROOT, "docs", "today.json")
+SLATES = [os.path.join(ROOT, "docs", f) for f in ("today.json", "tomorrow.json")]  # tomorrow: evening runs, near the open
 K = {"v1_total": 3.0, "v2_spread": 3.0, "v3_total": 3.0}
 COLS = ["date", "an_game_id", "start_utc", "away", "home", "strategy", "side", "line", "odds", "proj", "edge",
         "logged_et", "open_line", "close_line", "clv", "away_pts", "home_pts", "result", "units"]
@@ -40,8 +40,8 @@ def load(path, cols=None):
     return pd.read_csv(path, dtype={"an_game_id": str}) if os.path.exists(path) else pd.DataFrame(columns=cols)
 
 
-def log():
-    t = json.load(open(TODAY))
+def log(path):
+    t = json.load(open(path))
     now = datetime.now(timezone.utc)
     stamp = datetime.now(ZoneInfo("America/New_York")).strftime("%Y-%m-%d %H:%M")
     trades, slate = load(LOG, COLS), load(SLATE)
@@ -85,7 +85,7 @@ def log():
     trades[COLS].to_csv(LOG, index=False)
     if new_slate:
         pd.concat([slate, pd.DataFrame(new_slate)], ignore_index=True).to_csv(SLATE, index=False)
-    print(f"paper: {len(new)} new bets logged, {len(new_slate)} games added to the slate log")
+    print(f"paper ({t['date']}): {len(new)} new bets logged, {len(new_slate)} games added to the slate log")
 
 
 def grade():
@@ -127,7 +127,9 @@ def grade():
 
 
 if __name__ == "__main__":
-    log()
+    for path in SLATES:
+        if os.path.exists(path):
+            log(path)
     grade()
     t = load(LOG, COLS)
     for s, d in t.groupby("strategy"):

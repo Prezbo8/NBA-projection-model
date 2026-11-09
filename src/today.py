@@ -6,6 +6,8 @@ ESPN 'Out' as a fallback. Expected missing value = sum of P(out) x minutes x (va
 Props are projected for pool players with P(out) < 0.5 (a prop on a player who sits is void).
 
   python src/today.py           # writes docs/today.json
+  python src/today.py --tomorrow    # tomorrow's slate, totals only -> docs/tomorrow.json (evening runs: NBA totals
+                                    # open the night before and move a lot, so paper bets log near the opener)
 """
 import json
 import os
@@ -25,9 +27,12 @@ import team_model as tm
 from names import norm
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
-OUT = os.path.join(ROOT, "docs", "today.json")
+import sys
+from datetime import timedelta
+TOMORROW = "--tomorrow" in sys.argv
+OUT = os.path.join(ROOT, "docs", "tomorrow.json" if TOMORROW else "today.json")
 NOW = datetime.now(ZoneInfo("America/New_York"))
-TODAY = NOW.date()
+TODAY = NOW.date() + timedelta(days=1 if TOMORROW else 0)   # the slate's date
 DAY = (pd.Timestamp(TODAY) - pm.DAY0).days
 MARKET_STAT = {"pts": "PTS", "reb": "REB", "ast": "AST", "fg3m": "FG3M", "stl": "STL", "blk": "BLK",
                "pra": "PRA", "pr": "PR", "pa": "PA", "ra": "RA", "stocks": "STOCKS"}
@@ -94,6 +99,11 @@ def main():
         slate.setdefault(r["an_game_id"], {"an_game_id": r["an_game_id"], "start_utc": r["start_utc"],
                                            "status": r["status"], "away": r["away"], "home": r["home"]})
     print(f"{TODAY}: {len(slate)} games")
+    # tomorrow's slate: tonight's games aren't in the nba.com logs until the morning, so take tonight's
+    # schedule from Action Network for back-to-backs
+    tonight = set()
+    if TOMORROW:
+        tonight = {gameday.code(t) for at in actionnet.games(TODAY - timedelta(days=1))[1].values() for t in at}
     if not slate:
         json.dump({"generated_et": NOW.strftime("%Y-%m-%d %H:%M"), "date": str(TODAY), "games": [], "props": []},
                   open(OUT, "w"), indent=1)
@@ -130,7 +140,7 @@ def main():
             mmin += p_out * m
             players.append({"player_id": int(pid), "player": names.get(pid, str(pid)), "min": round(m, 1),
                             "value": round(v, 3), "pts_min": round(ppm, 3), "p_out": round(p_out, 2)})
-        return tid, miss, players, bool(last_day.get(tid, -9) == DAY - 1), mpts, mmin
+        return tid, miss, players, bool(last_day.get(tid, -9) == DAY - 1 or abbr in tonight), mpts, mmin
 
     games = []
     for gm in slate.values():
@@ -170,6 +180,8 @@ def main():
                       "edge_spread": None if ln["spread_home"] is None else round(ln["spread_home"] - (pa - ph), 1),
                       "home_players": hpl, "away_players": apl, "home_tid": int(ht), "away_tid": int(at)})
 
+    if TOMORROW:
+        return write(games, [])
     # ---- props
     league = pm.league_rates(p)
     tabs, opp_league = pm.opp_tables(g)
@@ -227,6 +239,10 @@ def main():
                           "mkt_over": None if pd.isna(c.over) or pd.isna(c.under) else round(no_vig(c.over, c.under), 3),
                           "best_over": None if bo_ is None else {"book": bo_.book, "odds": bo_.over},
                           "best_under": None if bu_ is None else {"book": bu_.book, "odds": bu_.under}})
+    write(games, props)
+
+
+def write(games, props):
     for gm in games:
         for k in ("home_players", "away_players"):
             gm[k] = sorted(gm[k], key=lambda x: -x["min"])
