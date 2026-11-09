@@ -4,7 +4,9 @@ name: Probe nba.com (Mac runner)
 # SECURITY: the repo is public, so jobs on the Mac runner may only be started by schedule or by hand,
 # never by pull_request (that would let anyone's fork run code on the Mac).
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      script: {description: "research/ script to run instead of the default probe (e.g. probe_tracking.py)", default: ""}
 jobs:
   probe:
     runs-on: [self-hosted, nba-stats]
@@ -16,6 +18,7 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/venv"
           "$RUNNER_TEMP/venv/bin/pip" install -q requests curl_cffi
       - name: Probe nba.com (plain requests, then Chrome-like connection)
+        if: inputs.script == ''
         run: |
           {
             "$RUNNER_TEMP/venv/bin/python" -I -c "
@@ -27,6 +30,13 @@ jobs:
           "
             "$RUNNER_TEMP/venv/bin/python" research/probe_nba_chrome.py
           } | tee probe.txt
+      - name: Run research script
+        if: inputs.script != ''
+        env: {SCRIPT: "${{ inputs.script }}"}
+        run: |
+          case "$SCRIPT" in *[!A-Za-z0-9_.]*|*..*) echo "bad script name"; exit 1;; esac
+          "$RUNNER_TEMP/venv/bin/pip" install -q pandas
+          "$RUNNER_TEMP/venv/bin/python" "research/$SCRIPT" | tee probe.txt
       - name: Summary
         if: always()
         run: |
